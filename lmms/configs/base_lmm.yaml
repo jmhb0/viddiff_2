@@ -1,0 +1,28 @@
+# todo: set deafault logging params like log_imgs 
+project: viddiff_2
+seed: 0
+debug: 0
+do_eval: 1 
+eval_mode: 0
+
+logging: 
+  name: base_lmm
+  results_dir: lmms/results/${logging.name}/seed_${seed}
+  overwrite_ok: True
+  verbose: 1 
+
+data:
+  split: demo
+  debug: ${debug}
+  eval_mode: ${evaluator.eval_mode}  
+  subset_mode: "0" # works with "3_per_action" for example
+  
+evaluator:
+  do: ${do_eval}
+  eval_mode: ${eval_mode}
+  prompt_key_open_matching: 0
+
+lmm:
+  api: openai
+  model: gpt-4o-mini
+  video_representation: sequence
