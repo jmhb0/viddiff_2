@@ -28,9 +28,6 @@ def download_and_extract_videos(dataset_name, output_dir, split):
 
     print(f"Videos extracted to {output_dir}")
 
-    # Optional: Remove the downloaded zip file
-    # os.remove(zip_path)
-
 # Usage
 dataset_name = "viddiff/viddif_4"
 output_dir = "."

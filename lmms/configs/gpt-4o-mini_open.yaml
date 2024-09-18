@@ -5,7 +5,7 @@ do_eval: 1
 eval_mode: 0
 
 logging: 
-  name: base_lmm
+  name: gpt-4o-mini_open
   results_dir: lmms/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: 1 
@@ -14,7 +14,7 @@ data:
   split: demo
   debug: ${debug}
   eval_mode: ${evaluator.eval_mode}  
-  subset_mode: "0" # works with "3_per_action" for example
+  subset_mode: "2_per_action"
   
 evaluator:
   do: ${do_eval}
@@ -25,9 +25,5 @@ lmm:
   api: openai
   model: gpt-4o-mini
   video_representation: frames
-  # fps: change video fps to this. -1 means don't change it.
-  fps: -1                   
-  # if fps_warning=True, then log warnings if original fps is not exactly divisible by target fps, or if target fps is higher than original fps
-  fps_warning: True   
-  n_differences: 8
-
+  fps: 4
+  seed: ${seed}
