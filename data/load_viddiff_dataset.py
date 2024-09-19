@@ -2,6 +2,7 @@ import ipdb
 import pdb
 import os
 import numpy as np
+import copy
 import json
 import re
 from PIL import Image
@@ -21,7 +22,7 @@ cache_data = lmdb.open("cache/cache_data", map_size=int(1e12))
 
 
 def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
-    dataset = load_dataset("viddiff/viddiff_0")
+    dataset = load_dataset("viddiff/viddiff_0", cache_dir=None)
     dataset = dataset['test']
 
     def _filter_splits(example):
@@ -37,6 +38,7 @@ def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
         return example
 
     dataset = dataset.map(_map_elements_to_json)
+    # dataset = dataset.map(_clean_annotations)
     dataset = apply_subset_mode(dataset, subset_mode)
 
     return dataset
@@ -66,6 +68,25 @@ def load_all_videos(dataset, do_tqdm=True):
         all_videos[0].append(videos[0])
         all_videos[1].append(videos[1])
     return all_videos
+
+def _clean_annotations(example):
+    # Not all differences in the taxonomy may have a label available, so filter them.
+    
+    differences_gt_labeled = {
+        k: v
+        for k, v in example['differences_gt'].items() if v is not None
+    }
+    differences_annotated = {
+        k: v
+        for k, v in example['differences_annotated'].items()
+        if k in differences_gt_labeled.keys()
+    }
+
+    # Directly assign to the example without deepcopy
+    example['differences_gt'] = differences_gt_labeled
+    example['differences_annotated'] = differences_annotated
+
+    return example
 
 
 def get_video_data(videos: dict, cache=True):
@@ -167,7 +188,9 @@ def _load_video_from_directory_of_images(
     return video_array
 
 
-def _subsample_video(video: np.ndarray, fps_original: int, fps_target: int,
+def _subsample_video(video: np.ndarray,
+                     fps_original: int,
+                     fps_target: int,
                      fps_warning: bool = True):
     """ 
     video: video as numby array (nframes, 3, h, w)

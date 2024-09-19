@@ -13,7 +13,7 @@ sys.path.insert(0, ".")
 from data import load_viddiff_dataset as lvd
 from lmms.configs import config_utils
 from lmms import lmm_utils as lu
-# import eval_viddiff
+import eval_viddiff
 
 
 # yapf: disable
@@ -40,7 +40,8 @@ def main(config, name):
                              verbose=True)
 
     # do eval
-    # results = eval_viddiff.eval_viddiff(dataset, predictions)
+    results = eval_viddiff.eval_viddiff(dataset, predictions, args.eval_mode,
+                                        args.seed, args.n_differences)
     ipdb.set_trace()
     pass
 

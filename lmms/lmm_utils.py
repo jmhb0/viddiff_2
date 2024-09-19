@@ -7,10 +7,12 @@ from omegaconf.basecontainer import BaseContainer
 from apis import openai_api
 
 import sys
+
 sys.path.insert(0, ".")
 
 import data.load_viddiff_dataset as lvd
 import lmms.lmm_prompts as lp
+
 
 def make_text_prompts(dataset: Dataset, videos: Tuple, eval_mode: int,
                       args_lmm: BaseContainer):
@@ -75,6 +77,12 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
         video_rep_description = video_rep_description.replace(
             "{fps}", str(fps_new_images[0]))
 
+        total_frames = nframes[0] + nframes[1]
+        if  total_frames > args_lmm.max_imgs:
+            raise ValueError(f"Total frames [{total_frames}] is more than the "\
+                "max frames set in the config lmms.max_frames. Change the " \
+                "max_frames or lower the config value for lmms.fps")
+
     else:
         raise ValueError(
             f"Config for lmm.video_representation [{video_representation}] not recognised"
@@ -84,6 +92,27 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
                                       video_rep_description)
 
     return prompt_text, prompt_videos
+
+
+def truncate_too_many_preds(predictions, n_differences, do_warning):
+    """
+    Just naiveley take the first `n_differences` values
+    """
+    for i, pred in enumerate(predictions):
+        if len(pred) > n_differences:
+
+            if do_warning:
+                logging.warning(f"Max {n_differences} differences allowed, but "\
+                    f"prediction {i} has {len(pred)}. Doing naive truncation.")
+
+            pred = {
+                k: v
+                for num, (k, v) in enumerate(pred.items())
+                if num < n_differences
+            }
+
+    assert all([len(pred)<=n_differences for pred in predictions])
+    return predictions
 
 
 def run_lmm(batch_prompts_text, batch_prompts_video, args_lmm, verbose=True):
@@ -96,7 +125,6 @@ def run_lmm(batch_prompts_text, batch_prompts_video, args_lmm, verbose=True):
     if args_lmm.api == "openai":
         assert args_lmm.video_representation == "frames"
         seeds = [args_lmm.seed] * len(batch_prompts_text)
-        ipdb.set_trace()
         if verbose:
             logging.info(
                 f"Runnin model {args_lmm.model} on {len(batch_prompts_text)} prompts"
@@ -106,14 +134,14 @@ def run_lmm(batch_prompts_text, batch_prompts_video, args_lmm, verbose=True):
                                         seeds=seeds,
                                         model='gpt-4o-mini')
         cost = sum([b[1] for b in res])
-        logging.info(f"Cost for variation generation: ${cost:.4f}")
-        predictions = [b[0]['differences'] for b in res]
+        logging.info(f"Cost for lmm differences generation: ${cost:.4f}")
+        predictions = [b[0] for b in res]
+        predictions = truncate_too_many_preds(predictions,
+                                              args_lmm.n_differences,
+                                              do_warning=True)
 
     else:
         raise ValueError(
             f"Have not implemented baseline [{args_lmm.api}] in config")
 
     return predictions
-
-
-

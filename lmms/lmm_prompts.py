@@ -4,22 +4,25 @@ Here are two videos of an action with the following description: "{action_descri
 {video_representation_description}
 
 Return a list of 'differences' in how the action is being performed. 
-Each difference should have a 'description' that is a specific statements that more true in one video compared to the other video. 
+Each difference should have a 'description' that is a specific statements that is more true in one video compared to the other video. 
 The differences should be visual and about how the action is performed.
+For example "they jump higher", or "the arm is more straight".
 Suggest no more than {n_differences} differences.
 
 Then there is a 'prediction' which is 'a' if the statement applies more to video a and 'b' if it applies more to video b.
 The differences should be visual and about how the action is performed. 
 
 Return a json like this:
-{ 
-    "differences" : [
-        {
-            "description" : ....,
+{[
+    '0' :  {
+            "description" : "....",
             "prediction" : "a|b",
-        }, ...
-    ]
-}
+        },
+    '1' :  {
+            "description" : "....",
+            "prediction" : "a|b",
+        }, ..
+]}
 """
 
 prompt_template_closed = """\
