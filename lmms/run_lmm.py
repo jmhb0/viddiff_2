@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO,
 
 sys.path.insert(0, ".")
 from data import load_viddiff_dataset as lvd
-from lmms.configs import config_utils
+from lmms import config_utils
 from lmms import lmm_utils as lu
 import eval_viddiff
 
@@ -40,8 +40,12 @@ def main(config, name):
                              verbose=True)
 
     # do eval
-    results = eval_viddiff.eval_viddiff(dataset, predictions, args.eval_mode,
-                                        args.seed, args.n_differences)
+    results = eval_viddiff.eval_viddiff(dataset,
+                                        predictions_unmatched=predictions,
+                                        eval_mode=args.eval_mode,
+                                        seed=args.seed,
+                                        n_differences=args.n_differences,
+                                        results_dir=args.logging.results_dir)
     ipdb.set_trace()
     pass
 

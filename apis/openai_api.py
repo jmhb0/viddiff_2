@@ -43,7 +43,7 @@ def call_gpt(
         json_mode: bool = True,
         # kwargs for client.chat.completions.create
         detail: str = "high",
-        model: str = "gpt-4-turbo-2024-04-09",
+        model: str = "gpt-4o-mini",
         temperature: float = 1,
         max_tokens: int = 2048,
         top_p: float = 1,
@@ -179,86 +179,6 @@ def _encode_image_np(image_np: np.array):
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 
-def run_prompt_experiment(prompts,
-                          imgs=None,
-                          results_dir=None,
-                          num_seeds=1,
-                          model="gpt-4-turbo-2024-04-09",
-                          json_mode=True,
-                          cache=True,
-                          verbose=True):
-    """ 
-    Call gpt for a sequence of `prompts` and optionally a sequence of a sequence
-    of `imgs`. 
-    Do it for `num_seeds` and return as a dict.
-    If `results_dir` is not None save:
-        prompts as f"p{prompt_idx}_s{seed}_prompt.txt"
-        resonse as f"p{prompt_idx}_s{seed}_response.json"". If response is not 
-        json-able, then extension is .txt.
-        It does not save a copy of the images - leave that to the caller.
-
-    Returns (dict): res. Each prompt has a dict, res[prompt_idx] with the prompt 
-    saved to res[prompt_idx]['prompt'] and responses for each seed saved to 
-    res[prompt_idx]['responses'][seed]. Responses are a dict if json-able, or 
-    a string otherwise.
-    """
-    kwargs = dict(model=model, json_mode=json_mode, cache=cache)
-    results = {}
-
-    all_prompts = []
-    all_imgs = []
-    all_seeds = []
-
-    # generate all the prompts
-    for i, prompt in enumerate(prompts):
-        for j in range(num_seeds):
-            all_prompts.append(prompt)
-            all_imgs.append(imgs)
-            all_seeds.append(j)
-
-    import time
-    start = time.time()
-    vlm_results = call_gpt_batch(texts=all_prompts,
-                                 imgs=all_imgs,
-                                 seeds=all_seeds)
-    if verbose:
-        print("time taken ", time.time() - start)
-
-    for i, prompt in enumerate(prompts):
-        # construct results object
-        results[i] = {}
-        results[i]['prompt'] = prompt
-        results[i]['responses'] = {}
-
-        # save prompt
-        if results_dir:
-            results_dir = Path(results_dir)
-            results_dir.mkdir(exist_ok=True, parents=True)
-            f_prompt = results_dir / f"p{i}_prompt.txt"
-            open(f_prompt, 'w').write(prompt)
-
-        for j, seed in enumerate(range(num_seeds)):
-            kwargs['seed'] = seed
-
-            # response, res = call_gpt(text=prompt, imgs=imgs[i], **kwargs)
-            response, res = vlm_results[i * num_seeds + j]
-
-            # parse json
-            if json_mode:
-                if results_dir:
-                    f_response = results_dir / f"p{i}_s{seed}_response.json"
-                    open(f_response, 'w').write(json.dumps(response, indent=4))
-
-            else:
-                if results_dir:
-                    f_response = results_dir / f"p{i}_s{seed}_response.txt"
-                    open(f_response, 'w').write(response)
-
-            results[i]['responses'][seed] = response
-
-    return results
-
-
 def call_gpt_batch(texts,
                    imgs=None,
                    seeds=None,
@@ -356,36 +276,12 @@ if __name__ == "__main__":
     sys.path.insert(0, ".")
 
     text0 = "How did Steve Irwin die?"
-    # text1 = "what is your favourite australian animal?"
-    # text2 = "how many chucks could a wood chuck chuck?"
-    # text3 = "how fast does a lemur move?"
-    # text4 = "who has the best llm?"
+    # text1 = "how many chucks could a wood chuck chuck?"
+    # text2 = "how fast does a lemur move?"
+    # text3 = "who has the best llm?"
 
-    model = "gpt-3.5-turbo"
-    # # model = "gpt-4-turbo-2024-04-09"
+    model = "gpt-4o-mini"
     msg, res = call_gpt(text0, cache=False, json_mode=False)
     # res = call_gpt_batch([text0, text0], cache=False, json_mode=False)
     ipdb.set_trace()
     pass
-
-    # texts = [text0, text1, text2, text0, text1]
-
-    # if 1:
-    #     # run async
-    #     start = time.time()
-    #     results0 = call_gpt_batch(texts=texts,
-    #                               cache=False,
-    #                               json_mode=False,
-    #                               model=model)
-    #     print(time.time() - start, f"parallel for {len(results0)} results")
-
-    # # run sync
-    # start = time.time()
-    # for text in texts:
-    #     res, msg = call_gpt(text=text,
-    #                         cache=False,
-    #                         json_mode=False,
-    #                         model=model)
-    # print(time.time() - start, f"sync for {len(texts )} results")
-    # ipdb.set_trace()
-    # pass

@@ -5,12 +5,17 @@ Here are two videos of an action with the following description: "{action_descri
 
 Return a list of 'differences' in how the action is being performed. 
 Each difference should have a 'description' that is a specific statements that is more true in one video compared to the other video. 
-The differences should be visual and about how the action is performed.
-For example "they jump higher", or "the arm is more straight".
+Then there is a 'prediction' which is 'a' if the statement applies more to video a and 'b' if it applies more to video b.
+
+The difference descriptions should be visual and about how the action is performed. 
+For example 'the jump is higher', or 'the arm is more straight'.
+
+The difference descriptions should not refer to a specific video. 
+For exmaple you would not say 'the jump in video B is higher'. 
+Instead, the 'description' would be 'the jump is higher', and the 'prediction' is 'b'.
+
 Suggest no more than {n_differences} differences.
 
-Then there is a 'prediction' which is 'a' if the statement applies more to video a and 'b' if it applies more to video b.
-The differences should be visual and about how the action is performed. 
 
 Return a json like this:
 {[

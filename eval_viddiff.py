@@ -5,30 +5,107 @@ import json
 import pandas as pd
 import logging
 import copy
+from datasets import Dataset
+from pathlib import Path
+import math
+
 from apis import openai_api
 
 
-def eval_viddiff(dataset, predictions_unmatched, eval_mode, seed,
-                 n_differences):
-    verify_n_differences(predictions_unmatched, n_differences)
+def eval_viddiff(dataset: Dataset,
+                 predictions_unmatched: list,
+                 eval_mode: int,
+                 seed: int,
+                 n_differences: int,
+                 results_dir=None):
+    validate_prediction_schema(predictions_unmatched, n_differences)
 
-    # in open mode, handle the matching
-    if eval_mode == 0:
-        predictions = do_matching(dataset, predictions_unmatched, seed)
-        predictions = test_reverse_statements(predictions, seed, batch_size=20)
-    else:
-        predictions = predictions_unmatched
+    # first handle the matching
+    predictions = do_matching(dataset, predictions_unmatched, seed)
+    predictions = test_reverse_statements(predictions, seed, batch_size=10)
 
-    # compute stuff and save to csv
+    # combine the predictions into a dataframe and compute some metrics
+    df = make_eval_df(dataset, predictions)
+    metrics = compute_metrics(df)
+
+    # logging
+    log(df, metrics, results_dir)
+
     ipdb.set_trace()
     pass
 
 
-def verify_n_differences(predictions_unmatched, n_differences):
+def compute_metrics(df_notfiltered, results_dir=None):
+    """
+    Compute the metrics, where we only consider samples with 'a' or 'b 
+    """
+    # in standard mode, only want rows where the gt difference is 'a' or 'b'
+    df = df_notfiltered[df_notfiltered['gt'].isin(['a', 'b'])].copy()
+    recall = (df['pred'] == df['gt']).sum() / len(df)
+
+    # error types - no match, or wrong prediction
+    df['err_nomatch'] = df['pred_description'].isna()
+    err_nomatch = df['err_nomatch'].mean()
+    df['err_flippedpred'] = (df['pred'] != df['gt']) & (~df['pred'].isna())
+    err_flippedpred = df['err_flippedpred'].mean()
+
+    assert math.isclose(err_flippedpred + err_nomatch, 1 - recall)
+
+    metrics = dict(recall=recall,
+                   err_nomatch=err_nomatch,
+                   err_flippedpred=err_flippedpred)
+
+    return metrics
+
+
+def log(df, metrics, results_dir):
+    if results_dir is None:
+        return
+
+    results_dir = Path(results_dir)
+
+    # log metrics
+    with open(results_dir / "eval_metrics.json", "w") as fp:
+        json.dump(metrics, fp, indent=4)
+
+    # log matching only
+    log_items = []
+    for sample_key in df['sample_key'].unique():
+        df_ = df[df['sample_key'] == sample_key]
+        log_item = df_.set_index('gt_key')[[
+            'sample_key', 'gt_description', 'pred_description', "is_opposite"
+        ]].to_dict('index')
+        log_items.append(log_item)
+    with open(results_dir / "eval_matching.json", 'w') as fp:
+        json.dump(log_items, fp, indent=4)
+
+    # log the full csv 
+    df.to_csv(results_dir / "df_all_gt_diffs.csv")
+
+    # log the csv for only when gt!='c'
+    df_ = df[df['gt']=='c'].copy()
+    df_.to_csv(results_dir / "df_gt_positive_diffs.csv")
+    df.to_csv()
+    pass
+
+    ipdb.set_trace()
+    pass
+
+
+def validate_prediction_schema(predictions_unmatched, n_differences):
+    # check the max number of differences was not exceeded
     for i, preds in enumerate(predictions_unmatched):
         if len(preds) > n_differences:
             raise ValueError(f"Maximum number of allowed differences is {n_differences} "\
                 f"but prediction number {i} has {len(preds)}: \n{preds}.")
+
+    # check that each prediction is one of 'a' or 'b'
+    for pred in predictions_unmatched:
+        for k, v in pred.items():
+            assert k.isdigit()
+            assert 'prediction' in v.keys()
+            assert 'description' in v.keys()
+            assert v['prediction'] in ('a', 'b')
 
 
 def do_matching(dataset, predictions_unmatched, seed):
@@ -96,10 +173,11 @@ def do_matching(dataset, predictions_unmatched, seed):
             pred[k] = {}
             pred[k]['gt_description'] = row['differences_annotated'][k][
                 'description']
-            pred[k]['pred_description'] = pred_unmatched.get(v,
-                                                             {})['description']
+            pred[k]['pred_description'] = pred_unmatched.get(v, {}).get(
+                'description', None)
             pred[k]['pred'] = pred_unmatched.get(v, {}).get('prediction', None)
             pred[k]['pred_key'] = v
+            pred[k]['gt_key'] = k
 
         # save the content
         predictions.append(pred)
@@ -115,10 +193,12 @@ def test_reverse_statements(predictions, seed, batch_size=20):
     examples at once. 
     """
 
-    # compile the statements
     statements = []
     for pred in predictions:
         for k, v in sorted(pred.items(), key=lambda x: int(x[0])):
+            # if no match, then skip
+            if pred[k]['pred_description'] is None:
+                continue
             statements.append(
                 [pred[k]['gt_description'], pred[k]['pred_description']])
 
@@ -131,18 +211,31 @@ def test_reverse_statements(predictions, seed, batch_size=20):
         batch_prompts_text.append(prompt)
 
     # run the prompts
-    res = openai_api.call_gpt_batch(batch_prompts_text)
+    seeds = [seed for _ in range(len(batch_prompts_text))]
+    res = openai_api.call_gpt_batch(batch_prompts_text,
+                                    seeds=seeds,
+                                    model="gpt-4o-mini")
     cost = sum([r[1] for r in res])
     logging.info(f"Cost for eval on 'is_opposite' statement: ${cost:.4f}")
     is_opposite = []
     for r in res:
         is_opposite += r[0]['results']
-    assert all(val in {'0', '1'} for val in is_opposite)
+    if not all(val in {'0', '1'} for val in is_opposite):
+        raise ValueError(f"LLM issue in `test_reverse_statements. The LLM out " \
+            "should be a list with valuesin {'0', '1'}."
+            f"This might be fixed by (i) changing random seed, or (ii) changing "
+            "lowering the batch_size, which controls how many statement pairs are "\
+            "evaluated per LLM call")
 
     # put the 'is_opposite' predictions back
     idx = 0
     for pred in predictions:
         for k, v in sorted(pred.items(), key=lambda x: int(x[0])):
+            # case 1: there was no match
+            if pred[k]['pred_description'] is None:
+                pred[k]['is_opposite'] = None
+                continue
+            # otherwise there was a match
             is_op = is_opposite[idx]
             if is_op == '1':
                 pred[k]['pred'] = flip_abc(pred[k]['pred'])
@@ -151,6 +244,33 @@ def test_reverse_statements(predictions, seed, batch_size=20):
     assert idx == len(is_opposite)
 
     return predictions
+
+
+def make_eval_df(dataset, predictions, results_dir=None):
+    # add the gt to the predictions and sample key to the predictions objects
+    for row, pred in zip(dataset, predictions):
+        differences_gt = {
+            k: v
+            for k, v in row['differences_gt'].items() if v is not None
+        }
+        assert set(differences_gt.keys()) == set(pred.keys())
+        for k in pred.keys():
+            pred[k]['gt'] = differences_gt[k]
+            pred[k]['sample_key'] = row['sample_key']
+
+    # first flatten then put to dataframe
+    flattened_data = []
+    for item in predictions:
+        for key, value in item.items():
+            flattened_data.append(value)
+    df = pd.DataFrame(flattened_data)
+
+    # some col reordering for convenient printing
+    first_cols = ['gt', 'pred', 'sample_key']
+    other_cols = [col for col in df.columns if col not in first_cols]
+    df = df[first_cols + other_cols]
+
+    return df
 
 
 def _verify_matching_properties(match, differences_gt, pred_unmatched):
@@ -186,38 +306,12 @@ def _verify_matching_properties(match, differences_gt, pred_unmatched):
 
 
 def flip_abc(r):
-    return {'a': 'b', 'b': 'a', 'c': 'c'}[r]
+    if r in ('a', 'b'):
+        return {'a': 'b', 'b': 'a'}[r]
+    else:
+        return r
 
 
-# prompt_open_eval_matching = """\
-# I am analyzing videos of people performing an action with description: "{action_description}".
-
-# A 'difference' descibes a way that two people might perform the action differently.
-# Each difference has a name, a description string that describes what might be different between a pair of videos.
-
-# Here is differences dict 0:
-# {differences0}
-
-# Here is differences dict 1:
-# {differences1}
-
-# Perform a matching from dict 0 to 1.
-# That is, for each item in dict 0, find a good match in dict 1, but each item in dict 1 can only be used once.
-# Only match the items if the description string matches closely. If there is no good match, return "None".
-# Focus on what visual features are been described. If the words describe a similar thing, but the word choice is different, it may still be a good match.
-
-# Return a json that uses the dict keys to do the matching.
-# The keys of the response are all of the keys from dict 0: {dict0_keys}
-# The values are a single key from dict 1 or "None". The dict2 keys are: {dict1_keys}
-# For example:
-# {
-#     "0" : "3",
-#     "1" : "None",
-#     "2" : "1",
-#     "3" : "5",
-#     ...
-# }
-# """
 prompt_open_eval_matching = """\
 You are analyzing videos of people performing a specific action described as "{action_description}."
 
@@ -266,7 +360,7 @@ Important Notes:
   Example: "X is much bigger than Y" and "X is slightly bigger than Y" should be categorized as '0', not '1'.
 
 Output Format:
-Provide your response as a JSON object containing an array of '0' or '1' values:
+Provide your response as a JSON object containing an array of "0" or "1" values:
 {"results" : ["1", "0", "0", ...]}
 
 Input:
