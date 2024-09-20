@@ -11,7 +11,7 @@ The difference descriptions should be visual and about how the action is perform
 For example 'the jump is higher', or 'the arm is more straight'.
 
 The difference descriptions should not refer to a specific video. 
-For exmaple you would not say 'the jump in video B is higher'. 
+For example you would not say 'the jump in video B is higher'. 
 Instead, the 'description' would be 'the jump is higher', and the 'prediction' is 'b'.
 
 Suggest no more than {n_differences} differences.

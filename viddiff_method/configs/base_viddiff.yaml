@@ -1,0 +1,38 @@
+project: viddiff
+seed: 0
+debug: 0
+do_eval: 1 
+eval_mode: 0
+n_differences: 8
+verbose: 1
+
+logging: 
+  name: base_viddiff
+  results_dir: viddiff_method/results/${logging.name}/seed_${seed}
+  overwrite_ok: True
+  verbose: ${verbose}
+
+data:
+  # split: demo
+  split: fitness
+  debug: ${debug}
+  eval_mode: ${eval_mode}  
+  subset_mode: "1_per_action" # works with "3_per_action" for example
+  # subset_mode: "0" # works with "3_per_action" for example
+
+proposer: 
+  api: openai
+  model: gpt-4o-mini 
+  prompt_key_1_differences: 0
+  prompt_key_2_subactions: 0
+  prompt_key_3_subaction_filtering: 0
+  prompt_key_4_linking: 0
+  filter_retrieval_keys: True
+  drop_unmatched_diffs: True
+  n_retrieval_keys: 5
+  n_differences: ${n_differences}
+  eval_mode: ${eval_mode}
+  do_eval: {do_eval}
+  verbose: ${verbose}
+  seed: ${seed}
+  

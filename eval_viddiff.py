@@ -22,7 +22,7 @@ def eval_viddiff(dataset: Dataset,
 
     # first handle the matching
     predictions = do_matching(dataset, predictions_unmatched, seed)
-    predictions = test_reverse_statements(predictions, seed, batch_size=10)
+    predictions = test_reverse_statements(predictions, seed, batch_size=6)
 
     # combine the predictions into a dataframe and compute some metrics
     df = make_eval_df(dataset, predictions)
@@ -30,9 +30,9 @@ def eval_viddiff(dataset: Dataset,
 
     # logging
     log(df, metrics, results_dir)
-
     ipdb.set_trace()
-    pass
+
+    return metrics
 
 
 def compute_metrics(df_notfiltered, results_dir=None):
@@ -79,17 +79,12 @@ def log(df, metrics, results_dir):
     with open(results_dir / "eval_matching.json", 'w') as fp:
         json.dump(log_items, fp, indent=4)
 
-    # log the full csv 
+    # log the full csv
     df.to_csv(results_dir / "df_all_gt_diffs.csv")
 
     # log the csv for only when gt!='c'
-    df_ = df[df['gt']=='c'].copy()
+    df_ = df[df['gt'] == 'c'].copy()
     df_.to_csv(results_dir / "df_gt_positive_diffs.csv")
-    df.to_csv()
-    pass
-
-    ipdb.set_trace()
-    pass
 
 
 def validate_prediction_schema(predictions_unmatched, n_differences):
@@ -110,7 +105,7 @@ def validate_prediction_schema(predictions_unmatched, n_differences):
 
 def do_matching(dataset, predictions_unmatched, seed):
     """ 
-    The input 'predictions' have numbered keys, 
+    The input 'predictions' have numbered keys. 
     """
     batch_prompts_text = []  # text prompt for doing matching
     # store, for each row, the difference decciptions that actuall have an annotation label (some are None)
@@ -155,7 +150,7 @@ def do_matching(dataset, predictions_unmatched, seed):
     logging.info(f"Cost for eval difference description matching: ${cost:.4f}")
     matches = [b[0] for b in res]
 
-    ## recover predictions and do the logging
+    ## recover predictions
     predictions = []  # matched predictions
     for row, differences_gt, pred_unmatched, match in zip(
             dataset, differences_gt_all, predictions_unmatched, matches):
@@ -194,6 +189,7 @@ def test_reverse_statements(predictions, seed, batch_size=20):
     """
 
     statements = []
+    idx = 0
     for pred in predictions:
         for k, v in sorted(pred.items(), key=lambda x: int(x[0])):
             # if no match, then skip
@@ -201,6 +197,7 @@ def test_reverse_statements(predictions, seed, batch_size=20):
                 continue
             statements.append(
                 [pred[k]['gt_description'], pred[k]['pred_description']])
+            idx += 1
 
     # make prompts, based on the batch size
     batch_prompts_text = []
@@ -221,11 +218,15 @@ def test_reverse_statements(predictions, seed, batch_size=20):
     for r in res:
         is_opposite += r[0]['results']
     if not all(val in {'0', '1'} for val in is_opposite):
-        raise ValueError(f"LLM issue in `test_reverse_statements. The LLM out " \
+        raise ValueError(f"LLM issue in `test_reverse_statements`. The LLM out " \
             "should be a list with valuesin {'0', '1'}."
             f"This might be fixed by (i) changing random seed, or (ii) changing "
             "lowering the batch_size, which controls how many statement pairs are "\
             "evaluated per LLM call")
+    if len(is_opposite) != len(statements):
+        raise ValueError(f"LLM issue in `test_reverse_statements`. Array has the wrong " \
+            "size. Try lowering batch_size, or the random seed. "
+            )
 
     # put the 'is_opposite' predictions back
     idx = 0
