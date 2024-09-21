@@ -38,7 +38,8 @@ class Proposer():
         self.dataset = dataset
 
         # logging subdirectory
-        self.results_subdir = Path(args_logging.results_dir) / "proposer"
+        self.results_subdir = Path(
+            args_logging.results_dir) / "stage1_proposer"
         self.results_subdir.mkdir(exist_ok=True, parents=True)
 
     def generate_proposals(self):
@@ -153,10 +154,11 @@ class Proposer():
             batch_seeds.append(seed)
 
         # run llm
-        llm_batch = openai_api.call_gpt_batch(batch_texts,
-                                              seeds=batch_seeds,
-                                              # overwrite_cache=True,
-                                              model=self.args.model)
+        llm_batch = openai_api.call_gpt_batch(
+            batch_texts,
+            seeds=batch_seeds,
+            # overwrite_cache=True,
+            model=self.args.model)
         cost = sum([b[1] for b in llm_batch])
         responses = [b[0] for b in llm_batch]
         logging.info(f"Cost for stages generation: ${cost:.4f}")
@@ -226,10 +228,11 @@ class Proposer():
             batch_texts.append(prompt_linking)
 
         # call llm
-        llm_batch = openai_api.call_gpt_batch(batch_texts,
-                                              model=self.args.model,
-                                              # overwrite_cache=True,
-                                              seed=self.args.seed)
+        llm_batch = openai_api.call_gpt_batch(
+            batch_texts,
+            model=self.args.model,
+            # overwrite_cache=True,
+            seed=self.args.seed)
         cost = sum([b[1] for b in llm_batch])
         logging.info(f"Cost for linking generation: ${cost:.4f}")
         responses = [b[0] for b in llm_batch]
@@ -255,12 +258,8 @@ class Proposer():
 
             # some basic validation checks
             stage_names = [d['name'] for d in stages['stages']]
-            difference_names = [d['name'] for d in differences.values()]
-
-            linked_differences_names = sum(links.values(), [])
-            if set(linked_differences_names) != set(difference_names):
-                logging.warning(f"missing some differences in the linking")
-                # raise ValueError(f"missing some differences in the linking")
+            differences, links
+            difference_names = set([d['name'] for d in differences.values()])
 
             if not all(s in stage_names for s in links.keys()):
                 logging.warning(
@@ -277,6 +276,22 @@ class Proposer():
                         f"llm response has bad difference name, differences \n real: {difference_names} \n generated: {differences_linked}"
                     )
 
+            # issue 1, differences not including in the linking
+            linked_differences_names = set(sum(links.values(), []))
+
+            # issue: there were differences from the proposal that were missed in linking. Just assign it arbitrarily to the middle stage
+            missing_diffs = difference_names - linked_differences_names
+            if len(missing_diffs) > 0:
+                logging.warning(f"\nMissing some differences in the linking. \nDifferences were:\n{difference_names}\nLinked differences were:\n{linked_differences_names}\nMissing:\n{missing_diffs}"\
+                    f"\nAssigning to the middle stage in sample {sample_key} action {sample['action_name']}")
+                n_stages = len(stages['stages'])
+                for diff in missing_diffs:
+                    stages['stages'][n_stages//2]['differences'].append(diff)
+
+            hallucinated_diffs = linked_differences_names - difference_names
+            if len(hallucinated_diffs) > 0:
+                raise NotImplementedError("TODO: decide how to handle this")
+
             # some basic type checking. If this fails, then change random seed, try again,
             stages = [Stage(**stage) for stage in stages['stages']]
             differences = {
@@ -290,6 +305,10 @@ class Proposer():
                 differences=differences)
             proposal.postprocess()
             self.proposals[sample['sample_key']] = proposal
+
+    def _validate_linking_operations(self, differences, links):
+        ipdb.set_trace()
+        pass
 
     def match_differences(self):
         """ 
@@ -306,7 +325,7 @@ class Proposer():
         once. 
         """
 
-        # we need to have the field 'description' and that's it
+        # create a predictions dict that works with the eval_viddiff functions 
         proposals_for_matching = []
         for sample in self.dataset:
             differences = self.proposals[sample['sample_key']].differences
@@ -318,10 +337,12 @@ class Proposer():
             }
             proposals_for_matching.append(diff_set)
 
+        # do the matching
         matching = eval_viddiff.do_matching(self.dataset,
                                             proposals_for_matching,
                                             self.args.seed)
 
+        # keep only the relevant matching results. `matching` has an element for every gt difference. If there's a matching `pred` then `pred_key` will be a key and not "None"
         def _clean_dict(d):
             keys_keep = ('pred_description', 'gt_description', 'pred_key')
             return {
@@ -330,6 +351,7 @@ class Proposer():
                  for key, value in v.items() if key in keys_keep}
                 for k, v in d.items()
             }
+
         matching = [_clean_dict(item) for item in matching]
 
         # filter out things that don't get matched
@@ -338,23 +360,17 @@ class Proposer():
         with open(self.results_subdir_matching / "matching.json", 'w') as fp:
             json.dump(matching, fp, indent=4)
 
-        # only keep the proposals that have a mapped gt value, and change the proposal key to the gt mapped key
-        num_before = 0
-        num_after = 0
+        # remove differences from proposal.differences that were not matched. Remap the difference keys to the gt key.
+        num_gt = 0
+        num_preds_after_matching = 0
         for i, sample in enumerate(self.dataset):
-            differences = self.proposals[sample['sample_key']].differences
-            num_before += len(differences)
-            matches = matching[i]
-            n_gt_diffs = len(matches)
-            idx_mapping = {v['pred_key'] : k for k, v in matches.items() if v['pred_key'] != 'None'}
-            n_recovered_diffs = len(idx_mapping)
-            acc = n_recovered_diffs / n_gt_diffs
+            proposal = self.proposals[sample['sample_key']]
+            num_gt += len(matching[i])
+            proposal.remap_indexes(matching[i])
+            num_preds_after_matching += len(proposal.differences)
 
-            # update the proposal 
-            diffs_updated = {idx_mapping[k]: v for k, v in differences.items() if k in idx_mapping}
-            self.proposals[sample['sample_key']].differences = diffs_updated
-            num_after += len(diffs_updated)
+        acc_recalled = num_preds_after_matching / num_gt
+        logging.info(
+            f"Recovered {acc_recalled:.4f} of the differences in the matching")
 
-        acc_kept = num_after / num_before
-        logging.info(f"Recovered {acc_kept:.4f} of the things in the matching")
 

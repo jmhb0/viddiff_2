@@ -35,28 +35,29 @@ cache_openai = lmdb.open("cache/cache_openai_", map_size=int(1e11))
 # cache_openai = lmdb.open("cache/cache_openai", map_size=int(1e11))
 cache_lock = Lock()
 
+
 def call_gpt(
-        # args for setting the `messages` param
-        text: str,
-        imgs: List[np.ndarray] = None,
-        system_prompt: str = None,
-        json_mode: bool = True,
-        # kwargs for client.chat.completions.create
-        detail: str = "high",
-        model: str = "gpt-4o-mini",
-        temperature: float = 1,
-        max_tokens: int = 2048,
-        top_p: float = 1,
-        frequency_penalty: float = 0,
-        presence_penalty: float = 0,
-        seed: int = 0,
-        n: int = 1,
-        # args for caching behaviour
-        cache: bool = True,
-        overwrite_cache: bool = False,
-        num_retries:
-        # if json_mode=True, and not json decodable, retry this many time
-        int = 3):
+    # args for setting the `messages` param
+    text: str,
+    imgs: List[np.ndarray] = None,
+    system_prompt: str = None,
+    json_mode: bool = True,
+    # kwargs for client.chat.completions.create
+    detail: str = "high",
+    model: str = "gpt-4o-mini",
+    temperature: float = 1,
+    max_tokens: int = 2048,
+    top_p: float = 1,
+    frequency_penalty: float = 0,
+    presence_penalty: float = 0,
+    seed: int = 0,
+    n: int = 1,
+    # args for caching behaviour
+    cache: bool = True,
+    overwrite_cache: bool = False,
+    num_retries:
+    # if json_mode=True, and not json decodable, retry this many time
+    int = 3):
     """ 
     Call GPT LLM or VLM synchronously with caching.
     To call this in a batch efficiently, see func `call_gpt_batch`.
@@ -166,6 +167,7 @@ def call_gpt(
 
     response = dict(prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens)
+    price = compute_api_call_cost(prompt_tokens, completion_tokens, model=model)
 
     return msg, response
 
@@ -220,7 +222,7 @@ def call_gpt_batch(texts,
             if tokens is not None:
                 price = compute_api_call_cost(
                     tokens['prompt_tokens'], tokens['completion_tokens'],
-                    kwargs.get("model", "gpt-4-turbo-2024-04-09"))
+                    kwargs.get("model", "gpt-4o"))
             else:
                 price = 0
 
@@ -237,15 +239,15 @@ def compute_api_call_cost(prompt_tokens: int,
     https://openai.com/api/pricing/
     """
     prices_per_million_input = {
-        "gpt-4o-mini" : 0.15,
-        "gpt-4o" : 5,
+        "gpt-4o-mini": 0.15,
+        "gpt-4o": 5,
         "gpt-4-turbo": 10,
         "gpt-4": 30,
         "gpt-3.5-turbo": 0.5
     }
     prices_per_million_output = {
-        "gpt-4o-mini" : 0.075,
-        "gpt-4o" : 15,
+        "gpt-4o-mini": 0.075,
+        "gpt-4o": 15,
         "gpt-4-turbo": 30,
         "gpt-4": 60,
         "gpt-3.5-turbo": 1.5
@@ -260,6 +262,9 @@ def compute_api_call_cost(prompt_tokens: int,
         key = "gpt-4"
     elif 'gpt-3.5-turbo' in model:
         key = "gpt-3.5-turbo"
+
+    ipdb.set_trace()
+    print(model)
 
     price = prompt_tokens * prices_per_million_input[
         key] + completion_tokens * prices_per_million_output[key]
@@ -281,7 +286,8 @@ if __name__ == "__main__":
     # text3 = "who has the best llm?"
 
     model = "gpt-4o-mini"
-    msg, res = call_gpt(text0, cache=False, json_mode=False)
+    print(model)
+    msg, res = call_gpt(text0, model=model, cache=False, json_mode=False)
     # res = call_gpt_batch([text0, text0], cache=False, json_mode=False)
     ipdb.set_trace()
     pass

@@ -17,12 +17,18 @@ def eval_viddiff(dataset: Dataset,
                  eval_mode: int,
                  seed: int,
                  n_differences: int,
+                 diffs_already_matched: bool = False,
                  results_dir=None):
+
     validate_prediction_schema(predictions_unmatched, n_differences)
 
     # first handle the matching
-    predictions = do_matching(dataset, predictions_unmatched, seed)
-    predictions = test_reverse_statements(predictions, seed, batch_size=6)
+    if not diffs_already_matched:
+        predictions = do_matching(dataset, predictions_unmatched, seed)
+        predictions = test_reverse_statements(predictions, seed, batch_size=6)
+    else:
+        predictions = predictions_unmatched
+        predictions = add_extra_details(dataset, predictions)
 
     # combine the predictions into a dataframe and compute some metrics
     df = make_eval_df(dataset, predictions)
@@ -100,7 +106,7 @@ def validate_prediction_schema(predictions_unmatched, n_differences):
             assert k.isdigit()
             assert 'prediction' in v.keys()
             assert 'description' in v.keys()
-            assert v['prediction'] in ('a', 'b')
+            assert v['prediction'] in ('a', 'b', 'c')
 
 
 def do_matching(dataset, predictions_unmatched, seed):
@@ -176,6 +182,35 @@ def do_matching(dataset, predictions_unmatched, seed):
 
         # save the content
         predictions.append(pred)
+
+    return predictions
+
+
+def add_extra_details(dataset, predictions):
+    """ """
+    for sample, pred in zip(dataset, predictions):
+
+        differences_gt = sample['differences_gt']
+        # add entries for the missing gt difference keys
+        keys_gt = [
+            key for key, value in differences_gt.items() if value is not None
+        ]
+        for key in keys_gt:
+            if key not in pred:
+                pred[key] = {'prediction': None, 'description': None}
+        assert set(keys_gt) == set(pred.keys())
+
+        # add the extra info that would have been added by the matching
+        for k in pred.keys():
+            pred[k]['pred'] = pred[k]['prediction']
+            del pred[k]['prediction']
+            # pred[k]['gt'] = differences_gt[k]
+            pred[k]['gt_key'] = k
+            pred[k]['pred_key'] = k
+            pred[k]['is_opposite'] = 0
+            pred[k]['pred_description'] = pred[key]['description']
+            pred[k]['gt_description'] = sample['differences_annotated'][k][
+                'description']
 
     return predictions
 

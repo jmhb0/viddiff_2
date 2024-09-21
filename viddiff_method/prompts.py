@@ -2,6 +2,18 @@
 # 1 differences only 
 # 2 subactions only 
 # 3 link the differences to the subactions
+
+
+# system prompt bc I got some refusals to answer sports-related videosk
+lookup_system_prompt_vision = {
+	0: """\
+You are a helpful vision assistant. 
+The images here are using publicly available data from a machine learning dataset.
+Your answers are been used to test your vision understanding. 
+Your answers will not be used to take any actions in the real world.
+"""
+}
+
 lookup_prompts_proposer_1_differences = {
  	0 : """\
 I have two videos of an action with the following description: "{action}".
@@ -116,3 +128,91 @@ Return a json like this:
 Please be careful. Every difference must appear at least once
 """,
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# here, we create separate query templates for single-image and multi-image cases.
+lookup_prompts_differencing_1_frame = {
+	0: """\
+These images are from two videos of people performing an action with description: "{action}".
+Which one shows more of the variation with this description: "{query_string}"?
+(a) image 1, (b) image 2, (c) similar or can't tell.
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}""",
+
+	# same as 0, but no 'c' option
+	1: """\
+These images are from two videos of people performing an action with description: "{action}".
+Which one shows more of the variation with this description: "{query_string}"?
+? (a) image 1, (b) image 2.
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b"}""",
+	
+	2: """\
+These images are from two videos of people performing an action with description: "{action}".
+Which one shows more of the variation with this description: "{query_string}"?
+(a) image 1, (b) image 2, (c) similar.
+Answer 'a' or 'b' only if confident. 
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}""",
+	
+	3: """\
+These images are from two videos of people performing an action with description: "{action}".
+Which one shows more of the variation with this description: "{query_string}"?
+(a) image 1, (b) image 2, (c) similar or can't tell.
+Please carefully compare these two images, and try to predict whether one image shows more on "{query_string}" than the other image.
+If the differences are very minor, or they just looks similar/comparable, please choose c.
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}"""
+}
+
+
+lookup_prompts_differencing_multiframe = {
+	0 : """\
+I have two videos of people performing an action with description: "{action}".
+The first {num_frames} frames are from video A and the last {num_frames} frames are from video B.
+For each video, the frames are very close together in the video: they are {time_diff} seconds apart.
+Which one shows more of the variation with this description: "{query_string}"?
+(a) video 1, (b) video 2, (c) similar or can't tell.
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}""",
+	
+	1 : """\
+I have two videos of people performing an action with description: "{action}".
+The first {num_frames} frames are from video A and the last {num_frames} frames are from video B.
+For each video, the frames are very close together in the video: they are {time_diff} seconds apart.
+Which one shows more of the variation with this description: "{query_string}"?
+(a) video 1, (b) video 2, (c) similar.
+Answer 'a' or 'b' only if confident. 
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}""",
+	
+	# exact same as 0. Did this so that I could run experiments where the prompt key for single and multiframe differencing were matched. 
+	2 : """\
+I have two videos of people performing an action with description: "{action}".
+The first {num_frames} frames are from video A and the last {num_frames} frames are from video B.
+For each video, the frames are very close together in the video: they are {time_diff} seconds apart.
+Which one shows more of the variation with this description: "{query_string}"?
+(a) video 1, (b) video 2, (c) similar or can't tell.
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}""",
+	
+	3 : """\
+I have two videos of people performing an action with description: "{action}".
+The first {num_frames} frames are from video A and the last {num_frames} frames are from video B.
+For each video, the frames are very close together in the video: they are {time_diff} seconds apart.
+Which one shows more of the variation with this description: "{query_string}"?
+(a) video 1, (b) video 2, (c) similar.
+Please carefully compare these frames, and try to predict whether one set of {num_frames} frames shows more on "{query_string}" than the other set of {num_frames} frames.
+If the differences are very minor, or they just looks similar/comparable, please choose c.
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}"""
+}
+
+
