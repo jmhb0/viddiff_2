@@ -12,6 +12,8 @@ from pathlib import Path
 from collections import OrderedDict
 import itertools
 from fuzzywuzzy import process as fw_process
+from datasets import Dataset
+from omegaconf.basecontainer import BaseContainer
 
 from viddiff_method import prompts
 from apis import openai_api
@@ -28,7 +30,8 @@ class Proposer():
     - each difference is associated to one or more stages
     """
 
-    def __init__(self, args, args_logging, dataset, dataset_eval=None):
+    def __init__(self, args: BaseContainer, args_logging: BaseContainer,
+                 dataset: Dataset, n_differences: list[int]):
         """ 
         """
         # save configs
@@ -37,6 +40,7 @@ class Proposer():
 
         # save dataset, and make sure samples are ordered
         self.dataset = dataset
+        self.n_differences = n_differences
 
         # logging subdirectory
         self.results_subdir = Path(
@@ -92,12 +96,11 @@ class Proposer():
         batch_texts = []
         batch_seeds = []
         sample_keys = []
-        for sample in self.dataset:
+        for sample, n_diff in zip(self.dataset, self.n_differences):
             seed = self.args.seed + sample['sample_hash']
             prompt = template_differences.replace("{action}",
                                                   sample['action_description'])
-            prompt = prompt.replace("{n_differences}",
-                                    str(self.args.n_differences))
+            prompt = prompt.replace("{n_differences}", str(n_diff))
 
             batch_texts.append(prompt)
             batch_seeds.append(seed)
@@ -113,11 +116,11 @@ class Proposer():
         responses = [b[0] for b in llm_batch]
 
         # enforce max n_differences
-        for res in responses:
-            if len(res) > self.args.n_differences:
-                res = dict(list(res.items())[:n_differences])
+        for res, n_diff in zip(responses, self.n_differences):
+            if len(res) > n_diff:
+                res = dict(list(res.items())[:n_diff])
                 logging.warning(f"A proposal had [{len(res)}'' differences " \
-                f"but max allowed is {n_differences}")
+                f"but max allowed is {n_diff}")
 
         # log results to object and to file
         self.responses_1_differences = dict(zip(sample_keys, responses))
@@ -257,7 +260,7 @@ class Proposer():
             stages = self.responses_2_stages[sample_key]
             links = self.responses_3_linking[sample_key]
 
-            ## we do some validation some basic validation checks. 
+            ## we do some validation some basic validation checks.
             # Reminder: the `link` keys are stage names, and the values are lists of differences
             stage_names = [d['name'] for d in stages['stages']]
             difference_names = set([d['name'] for d in differences.values()])
@@ -271,40 +274,41 @@ class Proposer():
                 for h_stage in hallucinated_stages_in_links:
 
                     # if it's very close in edit distance to another stage, then just add it to that stage
-                    stage_match, score = fw_process.extractOne(h_stage, stage_names)
+                    stage_match, score = fw_process.extractOne(
+                        h_stage, stage_names)
                     if score > 80:
                         links[stage_match] = links[h_stage]
-                    # otherwise just delete it. It's okay if there are differences missing from `links` ... there's a check for that later fix any spelling errors 
-                    else: 
+                    # otherwise just delete it. It's okay if there are differences missing from `links` ... there's a check for that later fix any spelling errors
+                    else:
                         pass
                     del links[h_stage]
 
-            # Issue 2: a stage is missing from the links list. Just add an empty list 
+            # Issue 2: a stage is missing from the links list. Just add an empty list
             missing_stages = set(stage_names) - set(links.keys())
-            if len(missing_stages)>0:
+            if len(missing_stages) > 0:
                 for s in missing_stages:
                     links[s] = []
 
-            # iterate over stages and put the corresponding differences in the stage dict 
+            # iterate over stages and put the corresponding differences in the stage dict
+
             for stage in stages['stages']:
-                differences_linked = links[stage['name']]
-                stage['differences'] = differences_linked
-
-                # issue: 
-                if not all([p in difference_names
-                            for p in differences_linked]):
-                    ipdb.set_trace()
-                    for i in range(len(differences_linked)):
+                ## issue 2: one of the linked differences is not in the original proposed differences. Rename it to the nearest string match
+                hallucinated_link_diffs = set(
+                    links[stage['name']]) - set(difference_names)
+                if len(hallucinated_link_diffs) > 0:
+                    for h_diff in hallucinated_link_diffs:
                         match, _ = fw_process.extractOne(
-                            differences_linked[i], difference_names)
-                        differences_linked[i] = match
-                    stage['differences'] = differences_linked
-                    # double check that it worked 
-                    assert all([p in difference_names for p in stage['differences']])
+                            h_diff, difference_names)
+                        # differences_linked = set(differences_linked) - {h_diff} | {match}
+                        links[stage['name']] = list(
+                            set(links[stage['name']]) - {h_diff} | {match})
+                # double check that any corrections do work
+                hallucinated_link_diffs = set(
+                    links[stage['name']]) - set(difference_names)
+                assert len(hallucinated_link_diffs) == 0
+                stage['differences'] = links[stage['name']]
 
-                stage['differences'] = differences_linked
-
-            # issue: there were differences from the proposal that were missed in linking. Just assign it arbitrarily to the middle stage
+            # issue 3: there were differences from the proposal that were missed in linking. Just assign it arbitrarily to the middle stage
             linked_differences_names = set(sum(links.values(), []))
             missing_diffs = difference_names - linked_differences_names
             if len(missing_diffs) > 0:
@@ -314,16 +318,13 @@ class Proposer():
                 for diff in missing_diffs:
                     stages['stages'][n_stages // 2]['differences'].append(diff)
 
-            hallucinated_diffs = linked_differences_names - difference_names
-            if len(hallucinated_diffs) > 0:
-                raise NotImplementedError("TODO: decide how to handle this")
 
-            # some basic type checking. If this fails, then change random seed, try again,
-            stages = [Stage(**stage) for stage in stages['stages']]
+            # construct the differnece, stages, and proposal objects
             differences = {
                 k: Difference(**var)
                 for k, var in differences.items()
             }
+            stages = [Stage(**stage) for stage in stages['stages']]
             proposal = Proposal(
                 action_key=sample['action'],
                 action_description=sample['action_description'],

@@ -16,6 +16,8 @@ TODO:
 
 ## Running eval
 In `eval_diff.py`, after loading the dataset and running predictions, run:
+
+TODO: loading n_differences
 ```
 metrics = eval_viddiff.eval_viddiff(
 	dataset,

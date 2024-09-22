@@ -3,7 +3,8 @@ seed: 0
 debug: 0
 do_eval: 1 
 eval_mode: 0
-n_differences: 8
+# a single int, OR path to a json, `ndiff` where the int is in ndiff[split_name][action_name], e.g. ndiff["fitness"]["fitness_0"] = 8
+n_differences: data/n_differences.json
 
 logging: 
   name: base_lmm

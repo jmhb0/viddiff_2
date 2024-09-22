@@ -65,9 +65,10 @@ def load_all_videos(dataset, cache=True, do_tqdm=True):
 
     return all_videos
 
+
 def _clean_annotations(example):
     # Not all differences in the taxonomy may have a label available, so filter them.
-    
+
     differences_gt_labeled = {
         k: v
         for k, v in example['differences_gt'].items() if v is not None
@@ -103,17 +104,20 @@ def get_video_data(videos: dict, cache=True):
         frames_trim = slice(*videos[i]['frames_trim'])
 
         video_dict = videos[i].copy()
-        # ipdb.set_trace()
 
         if cache:
             dir_cache = Path("cache/cache_data")
             dir_cache.mkdir(exist_ok=True, parents=True)
             hash_key = get_hash_key(path + str(frames_trim))
-            memmap_filename = dir_cache / f"memmap_{hash_key}.npy" 
+            memmap_filename = dir_cache / f"memmap_{hash_key}.npy"
 
             if os.path.exists(memmap_filename):
-                video_info = np.load(f"{memmap_filename}.info.npy", allow_pickle=True).item()
-                video = np.memmap(memmap_filename, dtype=video_info['dtype'], mode='r', shape=video_info['shape'])
+                video_info = np.load(f"{memmap_filename}.info.npy",
+                                     allow_pickle=True).item()
+                video = np.memmap(memmap_filename,
+                                  dtype=video_info['dtype'],
+                                  mode='r',
+                                  shape=video_info['shape'])
                 video_dict['video'] = video
                 video_dicts.append(video_dict)
                 continue
@@ -129,8 +133,14 @@ def get_video_data(videos: dict, cache=True):
             assert fps == videos[i]['fps']
 
         if cache:
-            np.save(f"{memmap_filename}.info.npy", {'shape': video.shape, 'dtype': video.dtype})
-            memmap = np.memmap(memmap_filename, dtype=video.dtype, mode='w+', shape=video.shape)
+            np.save(f"{memmap_filename}.info.npy", {
+                'shape': video.shape,
+                'dtype': video.dtype
+            })
+            memmap = np.memmap(memmap_filename,
+                               dtype=video.dtype,
+                               mode='w+',
+                               shape=video.shape)
             memmap[:] = video[:]
             memmap.flush()
             video = memmap
@@ -252,8 +262,44 @@ def apply_subset_mode(dataset, subset_mode):
     else:
         return dataset
 
+
 def get_hash_key(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
+
+
+def get_n_differences(dataset, config_n_differences: int | str | Path):
+    """
+    The maximum number of differences the model is allowed to make. 
+    Either it's a single int, or its a path to a json `ndiff`, where n_differences
+    is indexed by the data split and sample action, e.g.: 
+        ndiff['fitness']['fitness_4'] = 8
+    For split 'fitness' and action 'fitness_4'
+
+    Returns: a list with length len(dataset), with an int for each sample. 
+    """
+    if type(config_n_differences) is int:
+        n_differences = [config_n_differences] * len(dataset)
+    else:
+        path = Path(config_n_differences)
+        if not path.exists():
+            raise ValueError(
+                f"Config value n_differences: [{n_differences}] must be an int " \
+                "or a path to a json with per-action level stuff n_differences ")
+        with open(path, 'r') as fp:
+            lookup_ndiff = json.load(fp)
+        n_differences = []
+        for row in dataset:
+            split = row['split']
+            action = row['action']
+            if split not in lookup_ndiff.keys(
+            ) or action not in lookup_ndiff[split].keys():
+                raise ValueError(
+                    f"n_differences json at {path} has no entry for {(action, split)}"
+                )
+            n_differences.append(lookup_ndiff[split][action])
+
+    return n_differences
+
 
 if __name__ == "__main__":
     # dataset = load_viddiff_dataset(splits=['surgery','ballsports'])

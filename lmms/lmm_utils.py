@@ -1,10 +1,10 @@
 import ipdb
 from datasets import Dataset
-from typing import Tuple
 import numpy as np
 import logging
 from omegaconf.basecontainer import BaseContainer
 from apis import openai_api
+import numpy as np
 
 import sys
 
@@ -14,14 +14,15 @@ import data.load_viddiff_dataset as lvd
 import lmms.lmm_prompts as lp
 
 
-def make_text_prompts(dataset: Dataset, videos: Tuple, eval_mode: int,
-                      args_lmm: BaseContainer):
+def make_text_prompts(dataset: Dataset, videos: tuple, n_differences: list,
+                      eval_mode: int, args_lmm: BaseContainer):
 
     batch_prompts_text, patch_prompt_videos = [], []
     for i, row in enumerate(dataset):
         prompt_text, prompt_video = make_prompt(row['action_description'],
                                                 videos[0][i], videos[1][i],
-                                                eval_mode, args_lmm)
+                                                n_differences[i], eval_mode,
+                                                args_lmm)
         batch_prompts_text.append(prompt_text)
         patch_prompt_videos.append(prompt_video)
 
@@ -29,7 +30,7 @@ def make_text_prompts(dataset: Dataset, videos: Tuple, eval_mode: int,
 
 
 def make_prompt(action_description: str, video0: dict, video1: dict,
-                eval_mode: int, args_lmm: BaseContainer):
+                n_difference: int, eval_mode: int, args_lmm: BaseContainer):
     """
     create the text and video prompts 
     The possible representations are: 
@@ -47,8 +48,7 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
 
     prompt_text = prompt_text.replace("{action_description}",
                                       action_description)
-    prompt_text = prompt_text.replace("{n_differences}",
-                                      str(args_lmm.n_differences))
+    prompt_text = prompt_text.replace("{n_differences}", str(n_difference))
 
     # handle the video representation
     if args_lmm.video_representation == "frames":
@@ -78,7 +78,7 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
             "{fps}", str(fps_new_images[0]))
 
         total_frames = nframes[0] + nframes[1]
-        if  total_frames > args_lmm.max_imgs:
+        if total_frames > args_lmm.max_imgs:
             raise ValueError(f"Total frames [{total_frames}] is more than the "\
                 "max frames set in the config lmms.max_imgs. Change the " \
                 "max_frames or lower the config value for lmms.fps")
@@ -94,15 +94,16 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
     return prompt_text, prompt_videos
 
 
-def truncate_too_many_preds(predictions, n_differences, do_warning):
+def truncate_too_many_preds(predictions, n_differences: list[int],
+                            do_warning: bool):
     """
     Just naiveley take the first `n_differences` values
     """
     for i, pred in enumerate(predictions):
-        if len(pred) > n_differences:
+        if len(pred) > n_differences[i]:
 
             if do_warning:
-                logging.warning(f"Max {n_differences} differences allowed, but "\
+                logging.warning(f"Max {n_differences[i]} differences allowed, but "\
                     f"prediction {i} has {len(pred)}. Doing naive truncation.")
 
             pred = {
@@ -111,11 +112,19 @@ def truncate_too_many_preds(predictions, n_differences, do_warning):
                 if num < n_differences
             }
 
-    assert all([len(pred)<=n_differences for pred in predictions])
+    # double check that it worked
+    assert all([
+        len(pred) <= n_diff for pred, n_diff in zip(predictions, n_differences)
+    ])
+    
     return predictions
 
 
-def run_lmm(batch_prompts_text, batch_prompts_video, args_lmm, verbose=True):
+def run_lmm(batch_prompts_text: list[str],
+            batch_prompts_video: list[list[np.ndarray]],
+            args_lmm: BaseContainer,
+            n_differences: list[int],
+            verbose: bool = True):
     """ 
     Assumes that the `batch_prompts_video` was formatted in an appropriate way
     for each api in args_lmm.api. For example, openai takes videos as sequeneces
@@ -137,7 +146,7 @@ def run_lmm(batch_prompts_text, batch_prompts_video, args_lmm, verbose=True):
         logging.info(f"Cost for lmm differences generation: ${cost:.4f}")
         predictions = [b[0] for b in res]
         predictions = truncate_too_many_preds(predictions,
-                                              args_lmm.n_differences,
+                                              n_differences,
                                               do_warning=True)
 
     else:

@@ -3,7 +3,7 @@ seed: 0
 debug: 0
 do_eval: 1 
 eval_mode: 0
-n_differences: 8
+n_differences: data/n_differences.json
 verbose: 1
 
 logging: 

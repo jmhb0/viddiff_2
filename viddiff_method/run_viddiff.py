@@ -33,9 +33,10 @@ def main(config, name, seed, eval_mode):
     dataset = lvd.load_viddiff_dataset([args.data.split],
                                        args.data.subset_mode)
     videos = lvd.load_all_videos(dataset, do_tqdm=True)
+    n_differences = lvd.get_n_differences(dataset, args.n_differences)
 
     logging.info(f"Running LLM proposer")
-    proposer = Proposer(args.proposer, args.logging, dataset)
+    proposer = Proposer(args.proposer, args.logging, dataset, n_differences)
     proposals = proposer.generate_proposals()
 
 
@@ -49,10 +50,11 @@ def main(config, name, seed, eval_mode):
                                         retrieved_frames)
     predictions = frame_diferencer.caption_differences()
 
+    logging.info(f"Doing eval")
     results = eval_viddiff(dataset,predictions_unmatched=predictions,
                                         eval_mode=args.eval_mode,
                                         seed=args.seed,
-                                        n_differences=args.n_differences,
+                                        n_differences=n_differences,
                                         results_dir=args.logging.results_dir,
                                         diffs_already_matched=True,
                                         )

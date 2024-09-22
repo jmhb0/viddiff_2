@@ -206,7 +206,7 @@ def call_gpt_batch(texts,
             if json_modes is not None:
                 all_kwargs[i]['json_mode'] = json_modes[i]
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=64) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=128) as executor:
         futures = []
 
         for text, img, _kwargs in zip(texts, imgs, all_kwargs):

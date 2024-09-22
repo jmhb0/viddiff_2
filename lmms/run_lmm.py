@@ -26,28 +26,29 @@ def main(config, name):
     # config
     args = config_utils.load_config(config)
 
-    # get dataset and videos
+    # get dataset, videos, and allowable n_differences
     dataset = lvd.load_viddiff_dataset([args.data.split],
                                        args.data.subset_mode)
     videos = lvd.load_all_videos(dataset, do_tqdm=True)
+    n_differences = lvd.get_n_differences(dataset, args.lmm.n_differences)
 
     # make prompts and call the lmm
     batch_prompts_text, batch_prompts_video = lu.make_text_prompts(
-        dataset, videos, args.eval_mode, args.lmm)
+        dataset, videos, n_differences, args.eval_mode, args.lmm)
     predictions = lu.run_lmm(batch_prompts_text,
                              batch_prompts_video,
                              args.lmm,
+                             n_differences,
                              verbose=True)
 
     # do eval
-    metrics = eval_viddiff.eval_viddiff(dataset,
+    metrics = eval_viddiff.eval_viddiff(dataset=dataset,
                                         predictions_unmatched=predictions,
                                         eval_mode=args.eval_mode,
+                                        n_differences=n_differences,
                                         seed=args.seed,
-                                        n_differences=args.n_differences,
                                         results_dir=args.logging.results_dir)
     print(metrics)
-
     ipdb.set_trace()
     pass
 

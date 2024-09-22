@@ -13,10 +13,10 @@ from apis import openai_api
 
 
 def eval_viddiff(dataset: Dataset,
-                 predictions_unmatched: list,
+                 predictions_unmatched: list[dict[str, dict]],
                  eval_mode: int,
                  seed: int,
-                 n_differences: int,
+                 n_differences: list[int],
                  diffs_already_matched: bool = False,
                  results_dir=None):
 
@@ -53,7 +53,8 @@ def compute_metrics(df_notfiltered, results_dir=None):
     # error types - no match, or wrong prediction
     df['err_nomatch'] = df['pred'].isna()
     err_nomatch = df['err_nomatch'].mean()
-    df['err_flippedpred'] = (df['pred'] != df['gt']) & (df['pred'].isin(['a','b']))
+    df['err_flippedpred'] = (df['pred'] != df['gt']) & (df['pred'].isin(
+        ['a', 'b']))
     err_flippedpred = df['err_flippedpred'].mean()
     df['err_is_c'] = (df['pred'] == 'c')
     err_is_c = df['err_is_c'].mean()
@@ -98,11 +99,12 @@ def log(df, metrics, results_dir):
     df_.to_csv(results_dir / "df_gt_positive_diffs.csv")
 
 
-def validate_prediction_schema(predictions_unmatched, n_differences):
+def validate_prediction_schema(predictions_unmatched: list[dict],
+                               n_differences: list[int]):
     # check the max number of differences was not exceeded
     for i, preds in enumerate(predictions_unmatched):
-        if len(preds) > n_differences:
-            raise ValueError(f"Maximum number of allowed differences is {n_differences} "\
+        if len(preds) > n_differences[i]:
+            raise ValueError(f"Maximum number of allowed differences is {n_differences[i]} "\
                 f"but prediction number {i} has {len(preds)}: \n{preds}.")
 
     # check that each prediction is one of 'a' or 'b'
@@ -164,15 +166,16 @@ def do_matching(dataset, predictions_unmatched, seed):
 
     ## recover predictions
     predictions = []  # matched predictions
-    for i, (row, differences_gt, pred_unmatched, match) in enumerate(zip(
-                dataset, differences_gt_all, predictions_unmatched, matches)):
+    for i, (row, differences_gt, pred_unmatched, match) in enumerate(
+            zip(dataset, differences_gt_all, predictions_unmatched, matches)):
 
         # init the stuff to populate
         log_description_match = []
         pred = {}
 
         # verify that the `matching` output obeys some basic matching properties
-        match = _verify_matching_properties(match, differences_gt, pred_unmatched, i)
+        match = _verify_matching_properties(match, differences_gt,
+                                            pred_unmatched, i)
 
         # iterate over the matches
         pred = {}
@@ -315,7 +318,8 @@ def make_eval_df(dataset, predictions, results_dir=None):
     return df
 
 
-def _verify_matching_properties(match, differences_gt, pred_unmatched, row_idx):
+def _verify_matching_properties(match, differences_gt, pred_unmatched,
+                                row_idx):
     """
     We ask an LLM to perform a matching from "gt differences" to "pred differnces". 
     A gt difference is allowed to be to "None". Check that the matching properties 
