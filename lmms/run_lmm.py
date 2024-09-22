@@ -40,12 +40,14 @@ def main(config, name):
                              verbose=True)
 
     # do eval
-    results = eval_viddiff.eval_viddiff(dataset,
+    metrics = eval_viddiff.eval_viddiff(dataset,
                                         predictions_unmatched=predictions,
                                         eval_mode=args.eval_mode,
                                         seed=args.seed,
                                         n_differences=args.n_differences,
                                         results_dir=args.logging.results_dir)
+    print(metrics)
+
     ipdb.set_trace()
     pass
 

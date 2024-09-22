@@ -80,7 +80,7 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
         total_frames = nframes[0] + nframes[1]
         if  total_frames > args_lmm.max_imgs:
             raise ValueError(f"Total frames [{total_frames}] is more than the "\
-                "max frames set in the config lmms.max_frames. Change the " \
+                "max frames set in the config lmms.max_imgs. Change the " \
                 "max_frames or lower the config value for lmms.fps")
 
     else:

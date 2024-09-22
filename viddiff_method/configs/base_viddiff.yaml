@@ -14,11 +14,13 @@ logging:
 
 data:
   # split: demo
-  split: fitness
+  split: ballsports
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  subset_mode: "1_per_action" # works with "3_per_action" for example
-  fps: -1
+  subset_mode: "8_per_action" # works with "3_per_action" for example
+  # subset_mode: "1_per_action" # works with "3_per_action" for example
+  # fps: -1
+  fps: 4
   # subset_mode: "0" # works with "3_per_action" for example
 
 # stage 1
@@ -55,8 +57,8 @@ retriever:
 
 # stage 3
 frame_differencer:
-  prompt_key: 2
-  prompt_key_multiframe: 0
+  prompt_key: 4
+  prompt_key_multiframe: 4
   system_prompt_key: 0
   log_imgs: 0
   decode_strategy: 1    # prompt decoding strategy 

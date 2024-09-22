@@ -294,9 +294,9 @@ class Differencer():
             # loop over the vlm cals within one sample
             for pred_vlm in preds_vlm:
                 difference_key = pred_vlm['difference_idx']
-                pred_vlm['pred'] = pred_vlm['response'][0]['answer']
-                pred_vlm['pred_detail'] = pred_vlm['response'][0][
-                    'answer_detailed']
+                pred_vlm['pred'] = _force_pred(pred_vlm['response'][0]['answer'])
+                # pred_vlm['pred_detail'] = pred_vlm['response'][0][
+                #     'answer_detailed']
                 self.sample_predictions[sample_key][difference_key] = pred_vlm
 
             pred_eval = {
@@ -308,6 +308,13 @@ class Differencer():
             }
             self.predictions_for_eval.append(pred_eval)
 
+def _force_pred(r):
+    """in case of llm failure which happens sometimes """
+    if r in ('a','b','c'):
+        return r 
+    else: 
+        logging.warning(f"Forced pred, input was {r}")
+        return 'a'
 
 def vote_on_predictions(lst, priority_order=['a', 'b', 'c', 'd']):
     """ 

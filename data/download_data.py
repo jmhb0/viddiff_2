@@ -31,6 +31,6 @@ def download_and_extract_videos(dataset_name, output_dir, split):
 # Usage
 dataset_name = "viddiff/viddiff_0"
 output_dir = "."
-splits = ("fitness","demo", "easy")
+splits = ("surgery",) # "fitness","demo", "easy")
 for split in splits: 
     download_and_extract_videos(dataset_name, output_dir, split)

@@ -29,8 +29,8 @@ metrics = eval_viddiff.eval_viddiff(
 The structure for `predictions_unmatched`:
 ```
 [
+	// list element i is a dict of difference predictions for sample i
 	{
-		// list element i is a dict of difference predictions for sample i
 		"numericKey1": {
 			// prediction details for one difference
 			"description": "..." // A description of the predicted difference",
@@ -40,7 +40,7 @@ The structure for `predictions_unmatched`:
 			// Another difference prediction for the same smaple
 			// ... same structure as above ...
 		}
-		// There can be multiple differences per sample
+		// There can be multiple difference predictions per sample
 	},
 	{
 		// Another set of observations

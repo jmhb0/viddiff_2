@@ -36,6 +36,7 @@ def eval_viddiff(dataset: Dataset,
 
     # logging
     log(df, metrics, results_dir)
+    print(metrics)
     ipdb.set_trace()
 
     return metrics
@@ -50,16 +51,20 @@ def compute_metrics(df_notfiltered, results_dir=None):
     recall = (df['pred'] == df['gt']).sum() / len(df)
 
     # error types - no match, or wrong prediction
-    df['err_nomatch'] = df['pred_description'].isna()
+    df['err_nomatch'] = df['pred'].isna()
     err_nomatch = df['err_nomatch'].mean()
-    df['err_flippedpred'] = (df['pred'] != df['gt']) & (~df['pred'].isna())
+    df['err_flippedpred'] = (df['pred'] != df['gt']) & (df['pred'].isin(['a','b']))
     err_flippedpred = df['err_flippedpred'].mean()
+    df['err_is_c'] = (df['pred'] == 'c')
+    err_is_c = df['err_is_c'].mean()
+    # err = ((x['gt'] == 'a') & (x['pred'] == 'b')) | ((x['gt'] == 'b') & (x['pred'] == 'a'))
 
-    assert math.isclose(err_flippedpred + err_nomatch, 1 - recall)
+    assert math.isclose(err_flippedpred + err_nomatch + err_is_c, 1 - recall)
 
     metrics = dict(recall=recall,
                    err_nomatch=err_nomatch,
-                   err_flippedpred=err_flippedpred)
+                   err_flippedpred=err_flippedpred,
+                   err_is_c=err_is_c)
 
     return metrics
 
@@ -151,6 +156,7 @@ def do_matching(dataset, predictions_unmatched, seed):
     seeds = [seed for _ in range(len(batch_prompts_text))]
     res = openai_api.call_gpt_batch(batch_prompts_text,
                                     model='gpt-4o-mini',
+                                    overwrite_cache=True,
                                     seeds=seeds)
     cost = sum([b[1] for b in res])
     logging.info(f"Cost for eval difference description matching: ${cost:.4f}")
@@ -158,15 +164,15 @@ def do_matching(dataset, predictions_unmatched, seed):
 
     ## recover predictions
     predictions = []  # matched predictions
-    for row, differences_gt, pred_unmatched, match in zip(
-            dataset, differences_gt_all, predictions_unmatched, matches):
+    for i, (row, differences_gt, pred_unmatched, match) in enumerate(zip(
+                dataset, differences_gt_all, predictions_unmatched, matches)):
 
         # init the stuff to populate
         log_description_match = []
         pred = {}
 
         # verify that the `matching` output obeys some basic matching properties
-        _verify_matching_properties(match, differences_gt, pred_unmatched)
+        match = _verify_matching_properties(match, differences_gt, pred_unmatched, i)
 
         # iterate over the matches
         pred = {}
@@ -309,7 +315,7 @@ def make_eval_df(dataset, predictions, results_dir=None):
     return df
 
 
-def _verify_matching_properties(match, differences_gt, pred_unmatched):
+def _verify_matching_properties(match, differences_gt, pred_unmatched, row_idx):
     """
     We ask an LLM to perform a matching from "gt differences" to "pred differnces". 
     A gt difference is allowed to be to "None". Check that the matching properties 
@@ -332,13 +338,22 @@ def _verify_matching_properties(match, differences_gt, pred_unmatched):
             "Change the seed passed in to eval_viddiff() function and retry matching")
 
     # each 'predicted difference' from the `matches` is actually a predicted differences
-    if not all([m in pred_unmatched.keys() for m in match_vals]):
-        raise ValueError(
-            f"LLM error. The matches dict: [{match}] has values that are not one of "\
-            f" the keys in the predictions: {pred_unmatched.keys()}"
+    hallucinated_match_vals = set(match_vals) - set(pred_unmatched.keys())
+    if len(hallucinated_match_vals):
+
+        # raise ValueError(
+        logging.warning(
+            f"LLM issue, row {row_idx}. The matches dict: [{match}] has values that are not one of "\
+            f" the keys in the predictions: {pred_unmatched.keys()}\nHallucinated: {hallucinated_match_vals}.\n "
             "Change the seed passed in to eval_viddiff() function and retry matching")
 
-    return
+        for k in list(match.keys()):
+            if match[k] in hallucinated_match_vals:
+                match[k] = None
+
+    # no 'gt difference; is duplicated
+
+    return match
 
 
 def flip_abc(r):

@@ -5,7 +5,7 @@ VidDiff/
 *.pt
 *.png
 output.png 
-analysis_scripts/results/
+*results/
 data/*
 !data/*.py
 results
@@ -17,6 +17,7 @@ wandb
 profiling_results.txt
 *.mp4
 viddiff
+*npy
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

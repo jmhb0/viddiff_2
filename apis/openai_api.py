@@ -263,9 +263,6 @@ def compute_api_call_cost(prompt_tokens: int,
     elif 'gpt-3.5-turbo' in model:
         key = "gpt-3.5-turbo"
 
-    ipdb.set_trace()
-    print(model)
-
     price = prompt_tokens * prices_per_million_input[
         key] + completion_tokens * prices_per_million_output[key]
     price = price / 1e6
@@ -282,12 +279,11 @@ if __name__ == "__main__":
 
     text0 = "How did Steve Irwin die?"
     # text1 = "how many chucks could a wood chuck chuck?"
-    # text2 = "how fast does a lemur move?"
-    # text3 = "who has the best llm?"
+    # text2 = "who has the best llm?"
 
     model = "gpt-4o-mini"
     print(model)
     msg, res = call_gpt(text0, model=model, cache=False, json_mode=False)
-    # res = call_gpt_batch([text0, text0], cache=False, json_mode=False)
+# res = call_gpt_batch([text0, text1], cache=False, json_mode=False)
     ipdb.set_trace()
     pass

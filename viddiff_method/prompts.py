@@ -64,14 +64,15 @@ Only describe the visual features. Only describe what is visible in a single fra
 Give at least {n_retrieval_keys} retrieval strings per stage.
 
 Return a json like this:
-[
-	{ 
-	"name : "",
-	"description" : "...",
-	"retrieval_strings" : ["A photo of a ...", ...],
-	}, 
-	...	
-]""",
+{
+	"stages" : [
+		{ 
+		"name : "",
+		"description" : "...",
+		"retrieval_strings" : ["A photo of a ...", ...],
+		}, 
+		...	
+]}""",
 }
 
 # prompt to filter/refine the retrieval keys from `lookup_prompts_proposer_2_subactions` 
@@ -88,14 +89,15 @@ So, return the same stages and the same retrieval strings, but filtering out the
 The retrieval strings should only appear in the stages that are shown above. 
 
 Return a json like this:
-[
-	{ 
+{
+	"stages" : [
 		"name : "",
 		"description" : "...",
 		"retrieval_strings" : ["A photo of a ...", ...],
 	}, ...
 ]
-    """
+}
+"""
 }
 
 
@@ -173,7 +175,19 @@ Which one shows more of the variation with this description: "{query_string}"?
 (a) image 1, (b) image 2, (c) similar or can't tell.
 Please carefully compare these two images, and try to predict whether one image shows more on "{query_string}" than the other image.
 If the differences are very minor, or they just looks similar/comparable, please choose c.
-Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}"""
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}""",
+	4: """\
+These images are from two videos of people performing an action with description: "{action}".
+Which one shows more of the variation with this description: "{query_string}"?
+(a) image 1, (b) image 2.
+The 'answer' must be 'a' or 'b'
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b"}""",
+	5: """\
+These images are from two videos of people performing an action with description: "{action}".
+Which one shows more of the variation with this description: "{query_string}"?
+(a) image 1, (b) image 2.
+The 'answer' must be 'a' or 'b'
+Answer in json:  {'answer':"a|b"}""",
 }
 
 
@@ -212,7 +226,24 @@ Which one shows more of the variation with this description: "{query_string}"?
 (a) video 1, (b) video 2, (c) similar.
 Please carefully compare these frames, and try to predict whether one set of {num_frames} frames shows more on "{query_string}" than the other set of {num_frames} frames.
 If the differences are very minor, or they just looks similar/comparable, please choose c.
-Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}"""
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b|c"}""",
+	4 : """\
+I have two videos of people performing an action with description: "{action}".
+The first {num_frames} frames are from video A and the last {num_frames} frames are from video B.
+For each video, the frames are very close together in the video: they are {time_diff} seconds apart.
+Which one shows more of the variation with this description: "{query_string}"?
+(a) video 1, (b) video 2
+The 'answer' must be 'a' or 'b'
+Answer in json:  {'answer_detailed' : "...", 'answer':"a|b"}""",
+	5 : """\
+I have two videos of people performing an action with description: "{action}".
+The first {num_frames} frames are from video A and the last {num_frames} frames are from video B.
+For each video, the frames are very close together in the video: they are {time_diff} seconds apart.
+Which one shows more of the variation with this description: "{query_string}"?
+(a) video 1, (b) video 2
+The 'answer' must be 'a' or 'b'
+Answer in json:  {'answer':"a|b"}""",
+
 }
 
 

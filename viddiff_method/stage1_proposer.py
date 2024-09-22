@@ -11,6 +11,7 @@ import copy
 from pathlib import Path
 from collections import OrderedDict
 import itertools
+from fuzzywuzzy import process as fw_process
 
 from viddiff_method import prompts
 from apis import openai_api
@@ -248,45 +249,70 @@ class Proposer():
             with open(f_out, 'w') as f:
                 json.dump(res, f, indent=4)
 
-        # construct the final Proposer object
+        # construct the final Proposer object using the `link` llm response
         self.proposals = {}
-        for sample in self.dataset:
+        for i, sample in enumerate(self.dataset):
             sample_key = sample['sample_key']
             differences = self.responses_1_differences[sample_key]
             stages = self.responses_2_stages[sample_key]
             links = self.responses_3_linking[sample_key]
 
-            # some basic validation checks
+            ## we do some validation some basic validation checks. 
+            # Reminder: the `link` keys are stage names, and the values are lists of differences
             stage_names = [d['name'] for d in stages['stages']]
-            differences, links
             difference_names = set([d['name'] for d in differences.values()])
 
-            if not all(s in stage_names for s in links.keys()):
+            # Issue 1: a stage name in the link keys is hallucinated
+            hallucinated_stages_in_links = set(links.keys()) - set(stage_names)
+            if len(hallucinated_stages_in_links) > 0:
                 logging.warning(
-                    f"llm response has bad stage key, stage links \n real: {stage_names} \n generated: {links.keys()}"
+                    f"llm response has bad stage keys: {hallucinated_stages_in_links}\nReal stage links real: {stage_names}"
                 )
+                for h_stage in hallucinated_stages_in_links:
 
+                    # if it's very close in edit distance to another stage, then just add it to that stage
+                    stage_match, score = fw_process.extractOne(h_stage, stage_names)
+                    if score > 80:
+                        links[stage_match] = links[h_stage]
+                    # otherwise just delete it. It's okay if there are differences missing from `links` ... there's a check for that later fix any spelling errors 
+                    else: 
+                        pass
+                    del links[h_stage]
+
+            # Issue 2: a stage is missing from the links list. Just add an empty list 
+            missing_stages = set(stage_names) - set(links.keys())
+            if len(missing_stages)>0:
+                for s in missing_stages:
+                    links[s] = []
+
+            # iterate over stages and put the corresponding differences in the stage dict 
             for stage in stages['stages']:
                 differences_linked = links[stage['name']]
                 stage['differences'] = differences_linked
 
+                # issue: 
                 if not all([p in difference_names
                             for p in differences_linked]):
-                    raise ValueError(
-                        f"llm response has bad difference name, differences \n real: {difference_names} \n generated: {differences_linked}"
-                    )
+                    ipdb.set_trace()
+                    for i in range(len(differences_linked)):
+                        match, _ = fw_process.extractOne(
+                            differences_linked[i], difference_names)
+                        differences_linked[i] = match
+                    stage['differences'] = differences_linked
+                    # double check that it worked 
+                    assert all([p in difference_names for p in stage['differences']])
 
-            # issue 1, differences not including in the linking
-            linked_differences_names = set(sum(links.values(), []))
+                stage['differences'] = differences_linked
 
             # issue: there were differences from the proposal that were missed in linking. Just assign it arbitrarily to the middle stage
+            linked_differences_names = set(sum(links.values(), []))
             missing_diffs = difference_names - linked_differences_names
             if len(missing_diffs) > 0:
                 logging.warning(f"\nMissing some differences in the linking. \nDifferences were:\n{difference_names}\nLinked differences were:\n{linked_differences_names}\nMissing:\n{missing_diffs}"\
                     f"\nAssigning to the middle stage in sample {sample_key} action {sample['action_name']}")
                 n_stages = len(stages['stages'])
                 for diff in missing_diffs:
-                    stages['stages'][n_stages//2]['differences'].append(diff)
+                    stages['stages'][n_stages // 2]['differences'].append(diff)
 
             hallucinated_diffs = linked_differences_names - difference_names
             if len(hallucinated_diffs) > 0:
@@ -325,7 +351,7 @@ class Proposer():
         once. 
         """
 
-        # create a predictions dict that works with the eval_viddiff functions 
+        # create a predictions dict that works with the eval_viddiff functions
         proposals_for_matching = []
         for sample in self.dataset:
             differences = self.proposals[sample['sample_key']].differences
@@ -372,5 +398,3 @@ class Proposer():
         acc_recalled = num_preds_after_matching / num_gt
         logging.info(
             f"Recovered {acc_recalled:.4f} of the differences in the matching")
-
-

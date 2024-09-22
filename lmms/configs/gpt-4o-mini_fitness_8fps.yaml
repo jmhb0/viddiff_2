@@ -5,7 +5,7 @@ do_eval: 1
 eval_mode: 0
 
 logging: 
-  name: gpt-4o-mini_fitness
+  name: gpt-4o-mini_fitness_8fps
   results_dir: lmms/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: 1 
@@ -16,10 +16,10 @@ data:
   debug: ${debug}
   eval_mode: ${eval_mode}  
   subset_mode: "8_per_action"
-  fps: 4
 
 lmm:
   api: openai
+  fps: 8
   model: gpt-4o-mini
   video_representation: frames
   seed: ${seed}

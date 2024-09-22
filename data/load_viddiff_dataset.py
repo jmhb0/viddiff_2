@@ -2,26 +2,21 @@ import ipdb
 import pdb
 import os
 import numpy as np
-import copy
 import json
 import re
 from PIL import Image
 from pathlib import Path
 from datasets import load_dataset
 import decord
-import lmdb
 from tqdm import tqdm
-
-import sys
-
-sys.path.insert(0, ".")
-
-from cache import cache_utils
-
-cache_data = lmdb.open("cache/cache_data", map_size=int(1e12))
+import logging
+import hashlib
 
 
 def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
+    """
+    splits in ['ballsports', 'demo', 'easy', 'fitness', 'music', 'surgery']
+    """
     dataset = load_dataset("viddiff/viddiff_0", cache_dir=None)
     dataset = dataset['test']
 
@@ -44,7 +39,7 @@ def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
     return dataset
 
 
-def load_all_videos(dataset, do_tqdm=True):
+def load_all_videos(dataset, cache=True, do_tqdm=True):
     """ 
     Return a 2-element tuple. Each element is a list of length len(datset). 
     First list is video A for each datapoint as a dict with elements 
@@ -57,16 +52,17 @@ def load_all_videos(dataset, do_tqdm=True):
     all_videos = ([], [])
     # make iterator, with or without tqdm based on `do_tqdm`
     if do_tqdm:
-        print(f"Loading videos")
         it = tqdm(dataset)
     else:
         it = dataset
 
     # load each video
     for row in it:
-        videos = get_video_data(row['videos'], cache=True)
+        videos = get_video_data(row['videos'], cache=cache)
+
         all_videos[0].append(videos[0])
         all_videos[1].append(videos[1])
+
     return all_videos
 
 def _clean_annotations(example):
@@ -107,11 +103,17 @@ def get_video_data(videos: dict, cache=True):
         frames_trim = slice(*videos[i]['frames_trim'])
 
         video_dict = videos[i].copy()
+        # ipdb.set_trace()
 
         if cache:
-            hash_key = cache_utils.hash_key(path + str(frames_trim))
-            video = cache_utils.get_from_cache_np(hash_key, cache_data)
-            if video is not None:
+            dir_cache = Path("cache/cache_data")
+            dir_cache.mkdir(exist_ok=True, parents=True)
+            hash_key = get_hash_key(path + str(frames_trim))
+            memmap_filename = dir_cache / f"memmap_{hash_key}.npy" 
+
+            if os.path.exists(memmap_filename):
+                video_info = np.load(f"{memmap_filename}.info.npy", allow_pickle=True).item()
+                video = np.memmap(memmap_filename, dtype=video_info['dtype'], mode='r', shape=video_info['shape'])
                 video_dict['video'] = video
                 video_dicts.append(video_dict)
                 continue
@@ -127,7 +129,11 @@ def get_video_data(videos: dict, cache=True):
             assert fps == videos[i]['fps']
 
         if cache:
-            cache_utils.save_to_cache_np(hash_key, video, cache_data)
+            np.save(f"{memmap_filename}.info.npy", {'shape': video.shape, 'dtype': video.dtype})
+            memmap = np.memmap(memmap_filename, dtype=video.dtype, mode='w+', shape=video.shape)
+            memmap[:] = video[:]
+            memmap.flush()
+            video = memmap
 
         video_dict['video'] = video
         video_dicts.append(video_dict)
@@ -246,6 +252,8 @@ def apply_subset_mode(dataset, subset_mode):
     else:
         return dataset
 
+def get_hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
 
 if __name__ == "__main__":
     # dataset = load_viddiff_dataset(splits=['surgery','ballsports'])
