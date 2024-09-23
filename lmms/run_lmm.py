@@ -42,6 +42,7 @@ def main(config, name):
                              verbose=True)
 
     # do eval
+    ipdb.set_trace()
     metrics = eval_viddiff.eval_viddiff(dataset=dataset,
                                         predictions_unmatched=predictions,
                                         eval_mode=args.eval_mode,

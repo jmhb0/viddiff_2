@@ -47,6 +47,9 @@ def get_from_cache_np(key, env):
 def hash_key(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
 
+def hash_key_32(key: str) -> str:
+    return hashlib.md5(key.encode()).hexdigest()
+
 def hash_array(array: np.ndarray) -> str:
     return hashlib.sha256(array.tobytes()).hexdigest()
 

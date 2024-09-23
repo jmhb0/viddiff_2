@@ -113,7 +113,8 @@ def validate_prediction_schema(predictions_unmatched: list[dict],
             assert k.isdigit()
             assert 'prediction' in v.keys()
             assert 'description' in v.keys()
-            assert v['prediction'] in ('a', 'b', 'c')
+            if not v['prediction'] in ('a', 'b', 'c'):
+                logging.warning(f"prediction not in (a,b,c) ", v)
 
 
 def do_matching(dataset, predictions_unmatched, seed):

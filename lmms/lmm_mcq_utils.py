@@ -3,26 +3,30 @@ from datasets import Dataset
 import numpy as np
 import logging
 from omegaconf.basecontainer import BaseContainer
-import numpy as np
-import sys
 import json
+import pandas as pd
 
-sys.path.insert(0, ".")
-
-from apis import openai_api
-from apis import gemini_api
 import data.load_viddiff_dataset as lvd
 import lmms.lmm_prompts as lp
 
 
-def make_text_prompts(dataset: Dataset, videos: tuple, n_differences: list,
-                      eval_mode: int, args_lmm: BaseContainer):
+def make_text_prompts(dataset: Dataset, videos: tuple,
+                      args_lmm: BaseContainer):
 
     batch_prompts_text, patch_prompt_videos = [], []
     for i, row in enumerate(dataset):
+        keys_gt = {
+            k
+            for k, v in row['differences_gt'].items() if v is not None
+        }
+        differences_annotated = {
+            k: v['description']
+            for (k, v) in row['differences_annotated'].items() if k in keys_gt
+        }
+
         prompt_text, prompt_video = make_prompt(row['action_description'],
+                                                differences_annotated,
                                                 videos[0][i], videos[1][i],
-                                                n_differences[i], eval_mode,
                                                 args_lmm)
         batch_prompts_text.append(prompt_text)
         patch_prompt_videos.append(prompt_video)
@@ -30,26 +34,18 @@ def make_text_prompts(dataset: Dataset, videos: tuple, n_differences: list,
     return batch_prompts_text, patch_prompt_videos
 
 
-def make_prompt(action_description: str, video0: dict, video1: dict,
-                n_difference: int, eval_mode: int, args_lmm: BaseContainer):
+def make_prompt(action_description: str, differences_annotated: dict,
+                video0: dict, video1: dict, args_lmm: BaseContainer):
     """
     create the text and video prompts 
     The possible representations are: 
         - frames 
     """
-    # basic text prompting information
-    if eval_mode == 0:
-        prompt_text = lp.prompt_template_open
-    elif eval_mode == 1:
-        raise NotImplementedError()
-    elif eval_mode == 2:
-        raise NotImplementedError()
-    else:
-        raise ValueError()
-
+    prompt_text = lp.prompt_template_mcq_ab
     prompt_text = prompt_text.replace("{action_description}",
                                       action_description)
-    prompt_text = prompt_text.replace("{n_differences}", str(n_difference))
+    prompt_text = prompt_text.replace("{differences_annotated}",
+                                      json.dumps(differences_annotated))
 
     # handle the video representation
     if args_lmm.video_representation == "frames":
@@ -102,7 +98,6 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
 def run_lmm(batch_prompts_text: list[str],
             batch_prompts_video: list[list[np.ndarray]],
             args_lmm: BaseContainer,
-            n_differences: list[int],
             verbose: bool = True):
     """ 
     Assumes that the `batch_prompts_video` was formatted in an appropriate way
@@ -126,65 +121,29 @@ def run_lmm(batch_prompts_text: list[str],
         logging.info(f"Cost for lmm differences generation: ${cost:.4f}")
         predictions = [b[0] for b in res]
 
-    elif args_lmm.api == "gemini":
-
-        assert args_lmm.video_representation == "video"
-        seeds = [args_lmm.seed] * len(batch_prompts_text)
-        res = gemini_api.call_gemini_batch(batch_prompts_text,
-                                           batch_prompts_video,
-                                           seeds=seeds,
-                                           model=args_lmm.model,
-                                           fps=args_lmm.fps_gemini)
-        predictions = _reformat_malformed_json_prediction([r for r in res[0]])
-        ipdb.set_trace()
-        pass
-
-    else:
-        raise ValueError(
-            f"Have not implemented baseline [{args_lmm.api}] in config")
-
-    predictions = _truncate_too_many_preds(predictions,
-                                           n_differences,
-                                           do_warning=True)
-
-    ipdb.set_trace()
     return predictions
 
 
-def _reformat_malformed_json_prediction(malformed_outputs):
-    prompts = [
-        lp.prompt_reformat_malformed_json.replace("{llm_output}", g)
-        for g in malformed_outputs
-    ]
-    seeds = [0]*len(prompts)
-    res = openai_api.call_gpt_batch(prompts, seeds=seeds, model='gpt-4o-mini')
-    predictions = [r[0] for r in res]
-    ipdb.set_trace()
-
-    return predictions
-
-
-def _truncate_too_many_preds(predictions, n_differences: list[int],
-                             do_warning: bool):
-    """
-    Just naiveley take the first `n_differences` values
-    """
+def eval_mcq(dataset, predictions):
+    results = []
     for i, pred in enumerate(predictions):
-        if len(pred) > n_differences[i]:
+        row = dataset[i]
+        sample_key = row['sample_key']
+        differences_gt = row['differences_gt']
+        differences_annotated = row['differences_annotated']
 
-            if do_warning:
-                logging.warning(f"Max {n_differences[i]} differences allowed, but "\
-                    f"prediction {i} has {len(pred)}. Doing naive truncation.")
+        for k, v in pred.items():
+            res = [
+                row['sample_key'], differences_gt[k], pred[k], row['action'],
+                row['differences_annotated'][k]['name'],
+                row['differences_annotated'][k]['description']
+            ]
+            results.append(res)
 
-            pred = {
-                k: v
-                for num, (k, v) in enumerate(pred.items())
-                if num < n_differences
-            }
+    df = pd.DataFrame(
+        results,
+        columns=['sample_key', 'gt', 'pred', 'action', 'name', 'description'])
+    acc = (df['pred'] == df['gt']).sum() / len(df)
 
-    # double check that it worked
-    assert all([
-        len(pred) <= n_diff for pred, n_diff in zip(predictions, n_differences)
-    ])
-
-    return predictions
+    ipdb.set_trace()
+    pass
