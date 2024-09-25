@@ -17,20 +17,33 @@ Instead, the 'description' would be 'the jump is higher', and the 'prediction' i
 Suggest no more than {n_differences} differences.
 
 
-Return a json like this:
+Return a json like this, replacing '...' with actual content:
 {
     "0" :  {
             "description" : "....",
-            "prediction" : "a|b",
+            "prediction" : "a|b"
         },
     "1" :  {
             "description" : "....",
-            "prediction" : "a|b",
-        }, ..
+            "prediction" : "a|b"
+        }, 
+    ...
 }
 """
 
 prompt_template_mcq_ab = """\
+Here are two videos of an action with the following description: "{action_description}".
+{video_representation_description}
+
+Here is a difference that describe how the action can be performed differently:
+{differences_annotated}
+
+Your task is to predict whether the difference is more true for video 'a' or video 'b'.
+If video 'a', then write "The answer is (a)".
+If video 'b', then write "The answer is (b)".
+"""
+
+prompt_template_mcq = """\
 Here are two videos of an action with the following description: "{action_description}".
 {video_representation_description}
 
@@ -50,19 +63,27 @@ For example, if the difference '0' has prediction 'b' and difference '1' has pre
 ## prompt templates for explaining how the video is represented
 video_rep_description_2_videos = """\
 We have passed 'video a' and 'video b' as videos to the prompt in that order."""
-video_rep_description_1_video = """\
-We have passed in 1 video into the prompt, which is the concatenation of 'video a' and then 'video b'."""
+# video_rep_description_1_video = """\
+# We have passed in 1 video into the prompt, which is the concatenation of 'video a' and then 'video b'."""
 video_rep_description_2_grids = None  # """We have passed in 1 video into the prompt, which is the concatenation of 'video a' and then 'video b'."""
 video_rep_description_frames = """\
 We have passed a sequence of images into the prompt. 
-The first {vid0_nframes} are video A. The last {vid1_nframes} are video B. 
+The first {vid0_nframes} are video a. The last {vid1_nframes} are video b.
 The frame rate is the same and is {fps}.
 """
 video_rep_description_2_grids = """\
 We have passed two images into the prompt. 
-The first image is a grid of images showing the frames of video A row-wise. 
-The first image is a grid of images showing the frames of video B row-wise. 
+The first image is a grid of images showing the frames of video a row-wise. 
+The first image is a grid of images showing the frames of video b row-wise. 
 The frame rate is the same.
+"""
+video_rep_description_2_videos = """\
+We have passed 'video a' and 'video b' as videos to the prompt in that order."""
+video_rep_description_first_frame="""\
+We have provided two images. 
+The first image is the first frame from 'video a'. 
+The second image is the first frame from 'video b'.
+Try to make make the best prediction possible given only one frame. 
 """
 
 prompt_reformat_malformed_json = """\

@@ -31,8 +31,8 @@ sys.path.insert(0, ".")
 from cache import cache_utils
 
 client = OpenAI()
-cache_openai = lmdb.open("cache/cache_openai_", map_size=int(1e11))
-# cache_openai = lmdb.open("cache/cache_openai", map_size=int(1e11))
+# cache_openai = lmdb.open("cache/cache_openai_", map_size=int(1e12))
+cache_openai = lmdb.open("cache/cache_openai", map_size=int(1e12))
 cache_lock = Lock()
 
 
@@ -146,16 +146,6 @@ def call_gpt(
         completion_tokens = response.usage.completion_tokens
         msg = response.choices[0].message.content
 
-        if json_mode:
-            try:
-                _ = json.loads(msg)
-                break  # successfully output json
-
-            except json.decoder.JSONDecodeError:
-                if i == num_retries - 1:
-                    raise f"Response not valid json, after {num_retries} tries"
-                logging.info(f"Response not valid json, retrying")
-                continue
 
     # save to cache if enabled
     if cache:
@@ -283,7 +273,7 @@ if __name__ == "__main__":
 
     model = "gpt-4o-mini"
     print(model)
-    msg, res = call_gpt(text0, model=model, cache=False, json_mode=False)
+    msg, res = call_gpt(text0, model=model, cache=True, json_mode=False)
 # res = call_gpt_batch([text0, text1], cache=False, json_mode=False)
     ipdb.set_trace()
     pass

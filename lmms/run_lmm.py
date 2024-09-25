@@ -38,11 +38,11 @@ def main(config, name):
     predictions = lu.run_lmm(batch_prompts_text,
                              batch_prompts_video,
                              args.lmm,
+                             args.eval_mode,
                              n_differences,
                              verbose=True)
 
     # do eval
-    ipdb.set_trace()
     metrics = eval_viddiff.eval_viddiff(dataset=dataset,
                                         predictions_unmatched=predictions,
                                         eval_mode=args.eval_mode,
@@ -50,8 +50,6 @@ def main(config, name):
                                         seed=args.seed,
                                         results_dir=args.logging.results_dir)
     print(metrics)
-    ipdb.set_trace()
-    pass
 
 
 if __name__ == "__main__":

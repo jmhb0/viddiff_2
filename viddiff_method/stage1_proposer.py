@@ -70,7 +70,20 @@ class Proposer():
         return self.proposals
 
     def query_1_differences_gt(self):
-        raise
+        """ For eval_mode != 0, the gt differences are given """
+        self.responses_1_differences = {}
+        for row in self.dataset:
+            # get the differences that have a prediction for 
+            keys_gt = {
+                k
+                for k, v in row['differences_gt'].items() if v is not None
+            }
+            diffs = {
+                k: v
+                for k, v in row['differences_annotated'].items()
+                if k in keys_gt
+            }
+            self.responses_1_differences[row['sample_key']] = diffs
 
     def query_1_differences(self):
         """
@@ -119,7 +132,7 @@ class Proposer():
         for res, n_diff in zip(responses, self.n_differences):
             if len(res) > n_diff:
                 res = dict(list(res.items())[:n_diff])
-                logging.warning(f"A proposal had [{len(res)}'' differences " \
+                logging.warning(f"\nA proposal had [{len(res)}'' differences " \
                 f"but max allowed is {n_diff}")
 
         # log results to object and to file
@@ -269,7 +282,7 @@ class Proposer():
             hallucinated_stages_in_links = set(links.keys()) - set(stage_names)
             if len(hallucinated_stages_in_links) > 0:
                 logging.warning(
-                    f"llm response has bad stage keys: {hallucinated_stages_in_links}\nReal stage links real: {stage_names}"
+                    f"\nllm response has bad stage keys: {hallucinated_stages_in_links}\nReal stage links real: {stage_names}"
                 )
                 for h_stage in hallucinated_stages_in_links:
 
@@ -318,7 +331,6 @@ class Proposer():
                 for diff in missing_diffs:
                     stages['stages'][n_stages // 2]['differences'].append(diff)
 
-
             # construct the differnece, stages, and proposal objects
             differences = {
                 k: Difference(**var)
@@ -365,11 +377,11 @@ class Proposer():
             proposals_for_matching.append(diff_set)
 
         # do the matching
-        matching = eval_viddiff.do_matching(self.dataset,
-                                            proposals_for_matching,
-                                            self.args.seed)
+        matching, predictions_excess = eval_viddiff.do_matching(
+            self.dataset, proposals_for_matching, self.args.seed)
 
-        # keep only the relevant matching results. `matching` has an element for every gt difference. If there's a matching `pred` then `pred_key` will be a key and not "None"
+        # remove the differences that wre not in the matching results. `matching` has an element for
+        # every gt difference. If there's a matching `pred` then `pred_key` will be a key and not "None"
         def _clean_dict(d):
             keys_keep = ('pred_description', 'gt_description', 'pred_key')
             return {
@@ -386,6 +398,16 @@ class Proposer():
         self.results_subdir_matching.mkdir(exist_ok=True, parents=True)
         with open(self.results_subdir_matching / "matching.json", 'w') as fp:
             json.dump(matching, fp, indent=4)
+
+        # log the differences that wre discarded (they are excess)
+        with open(
+                self.results_subdir_matching / "non_matched_differences.json",
+                'w') as fp:
+            predictions_excess_dict = {
+                row['sample_key']: pred
+                for (row, pred) in zip(self.dataset, predictions_excess)
+            }
+            json.dump(predictions_excess_dict, fp, indent=4)
 
         # remove differences from proposal.differences that were not matched. Remap the difference keys to the gt key.
         num_gt = 0

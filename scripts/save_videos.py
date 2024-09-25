@@ -13,8 +13,9 @@ import sys
 import numpy as np
 import cv2
 import imageio
-import tqdm 
-from PIL import Image
+import imageio_ffmpeg as ffmpeg
+import tqdm
+from PIL import Image, ImageFont, ImageDraw
 
 logging.basicConfig(level=logging.INFO,
                     format='%(filename)s:%(levelname)s:%(message)s')
@@ -27,20 +28,19 @@ from lmms import lmm_mcq_utils as lmu
 results_dir = Path("scripts/results/dataset_properties")
 results_dir.mkdir(exist_ok=True, parents=True)
 
-split = 'easy'
-dataset = lvd.load_viddiff_dataset([split], '0')
-videos = lvd.load_all_videos(dataset, do_tqdm=True)
-
 
 def save_video(video_array, f_save, fps):
     assert video_array.ndim == 4 and video_array.shape[-1] == 3
+    h, w = video_array.shape[1:3]
+    
+    writer = ffmpeg.write_frames(f_save, (w, h), fps=fps)
+    writer.send(None)  # Initialize the writer
+    
+    for frame in video_array:
+        writer.send(np.asarray(frame))
+    
+    writer.close()
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        writer = imageio.get_writer(f_save, fps=fps)
-        for frame in video_array:
-            writer.append_data(frame)
-        writer.close()
 
 def stack_videos(vid0, vid1, mode='h'):
     """
@@ -119,8 +119,9 @@ def save_video_pairs(split):
     videos = lvd.load_all_videos(dataset, do_tqdm=True)
     results_subdir = results_dir / f"video_samples_{split}"
     results_subdir.mkdir(exist_ok=True, parents=True)
-    idx = 0 
-    for row , vid0, vid1 in tqdm.tqdm(zip(dataset, *videos), total=len(dataset)):
+    idx = 0
+    for row, vid0, vid1 in tqdm.tqdm(zip(dataset, *videos),
+                                     total=len(dataset)):
         # f0 = results_subdir / f"{row['sample_key']}_0.mp4"
         # f1 = results_subdir / f"{row['sample_key']}_1.mp4"
         # save_video(vid0['video'], f0, int(vid0['fps']))
@@ -131,9 +132,42 @@ def save_video_pairs(split):
         save_video(vid_stacked, f_save, int(vid0['fps']))
 
 
-if __name__=="__main__": 
-    split='fitness'
-    save_video_pairs(split)
+def create_grid_video(rgb_video,
+                      num_frames,
+                      n_rows,
+                      label_size=30,
+                      pad_size=10):
+    """
+    How is this different from `create_image_grid_with_labels` below?
+    Here you specify num_frames. ''
+    """
+    n, h, w, _ = rgb_video.shape
+    n_cols = (num_frames + n_rows - 1) // n_rows
 
-ipdb.set_trace()
-pass
+    # Create a blank canvas
+    canvas_width = n_cols * (w + pad_size) + pad_size
+    canvas_height = n_rows * (h + pad_size + label_size) + pad_size
+    canvas = Image.new('RGB', (canvas_width, canvas_height), (0, 0, 0))
+
+    font = ImageFont.load_default(label_size)
+    draw = ImageDraw.Draw(canvas)
+
+    for i in range(num_frames):
+        frame_idx = i * (n // num_frames)
+        frame = Image.fromarray(rgb_video[frame_idx])
+        col = i % n_cols
+        row = i // n_cols
+        x = col * (w + pad_size) + pad_size
+        y = row * (h + pad_size + label_size) + pad_size
+
+        canvas.paste(frame, (x, y + label_size))
+
+        # Draw the label
+        draw.text((x + w - label_size, y), str(i), fill="white", font=font)
+
+    return canvas
+
+
+if __name__ == "__main__":
+    split = 'fitness'
+    save_video_pairs(split)

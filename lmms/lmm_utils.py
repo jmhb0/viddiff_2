@@ -6,6 +6,8 @@ from omegaconf.basecontainer import BaseContainer
 import numpy as np
 import sys
 import json
+import pandas as pd
+import re
 
 sys.path.insert(0, ".")
 
@@ -20,28 +22,64 @@ def make_text_prompts(dataset: Dataset, videos: tuple, n_differences: list,
 
     batch_prompts_text, patch_prompt_videos = [], []
     for i, row in enumerate(dataset):
-        prompt_text, prompt_video = make_prompt(row['action_description'],
-                                                videos[0][i], videos[1][i],
-                                                n_differences[i], eval_mode,
-                                                args_lmm)
+        if eval_mode == 0:
+            differences_annotated = None
+
+        # collect the non-None annotated differneces and collect descriptions
+        elif eval_mode == 1:
+            keys_gt = {
+                k
+                for k, v in row['differences_gt'].items() if v is not None
+            }
+            differences_annotated = row['differences_annotated']
+            differences_annotated = {
+                k: v['description']
+                for (k, v) in differences_annotated.items() if k in keys_gt
+            }
+            assert len(differences_annotated) == 1
+            differences_annotated = list(differences_annotated.values())[0]
+
+            n_differences = [None] * len(dataset)
+
+        elif eval_mode == 2:
+            raise NotImplementedError()
+
+        else:
+            raise ValueError()
+
+        prompt_text, prompt_video = make_prompt(
+            row['action_description'],
+            videos[0][i],
+            videos[1][i],
+            eval_mode,
+            args_lmm,
+            n_differences[i],
+            differences_annotated=differences_annotated)
         batch_prompts_text.append(prompt_text)
         patch_prompt_videos.append(prompt_video)
 
     return batch_prompts_text, patch_prompt_videos
 
 
-def make_prompt(action_description: str, video0: dict, video1: dict,
-                n_difference: int, eval_mode: int, args_lmm: BaseContainer):
+def make_prompt(action_description: str,
+                video0: dict,
+                video1: dict,
+                eval_mode: int,
+                args_lmm: BaseContainer,
+                n_difference: int = None,
+                differences_annotated: dict = None):
     """
     create the text and video prompts 
-    The possible representations are: 
-        - frames 
+    The possible representations are: {'frames','video', 'first_frame'}
     """
-    # basic text prompting information
     if eval_mode == 0:
         prompt_text = lp.prompt_template_open
+        prompt_text = prompt_text.replace("{n_differences}", str(n_difference))
     elif eval_mode == 1:
-        raise NotImplementedError()
+        prompt_text = lp.prompt_template_mcq_ab
+        prompt_text = prompt_text.replace(
+            "{differences_annotated}",
+            json.dumps(differences_annotated, indent=2))
     elif eval_mode == 2:
         raise NotImplementedError()
     else:
@@ -49,7 +87,17 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
 
     prompt_text = prompt_text.replace("{action_description}",
                                       action_description)
-    prompt_text = prompt_text.replace("{n_differences}", str(n_difference))
+
+
+    # all videos have tha subsampling step
+    assert type(args_lmm.fps) is int
+    # print("Before ", video0['video'].shape, video1['video'].shape)
+    for video in (video0, video1):
+        video['video'], fps_new, subsample_time_int = lvd._subsample_video(
+            video['video'], video['fps_original'], args_lmm.fps,
+            args_lmm.fps_warning)
+    # print("After ", video0['video'].shape, video1['video'].shape)
+    # print()
 
     # handle the video representation
     if args_lmm.video_representation == "frames":
@@ -58,14 +106,11 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
         nframes = []
         fps_new_images = []
         prompt_videos = []
-        assert type(args_lmm.fps) is int
+
         for video in (video0, video1):
-            video['video'], fps_new, subsample_time_int = lvd._subsample_video(
-                video['video'], video['fps_original'], args_lmm.fps,
-                args_lmm.fps_warning)
             nframes.append(len(video['video']))
             fps_new_images.append(fps_new)
-            prompt_videos += list(video['video'])
+            prompt_videos += list(video['video'])        
 
         assert fps_new_images[0] == fps_new_images[1]
 
@@ -88,6 +133,10 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
         video_rep_description = lp.video_rep_description_2_videos
         prompt_videos = [video0['video'], video1['video']]
 
+    elif args_lmm.video_representation == "first_frame":
+        video_rep_description = lp.video_rep_description_first_frame
+        prompt_videos = [video0['video'][0], video1['video'][0]]
+
     else:
         raise ValueError(
             f"Config for lmm.video_representation [{video_representation}] not recognised"
@@ -102,6 +151,7 @@ def make_prompt(action_description: str, video0: dict, video1: dict,
 def run_lmm(batch_prompts_text: list[str],
             batch_prompts_video: list[list[np.ndarray]],
             args_lmm: BaseContainer,
+            eval_mode: int,
             n_differences: list[int],
             verbose: bool = True):
     """ 
@@ -110,18 +160,26 @@ def run_lmm(batch_prompts_text: list[str],
     of images, so the `batch_prompts_video` is actually a list of images, and the
     text prompts in `batch_prompts_text` should explain that.
     """
+    if eval_mode == 0:
+        assert n_differences is not None
+        json_mode = True
+    else:
+        assert n_differences is None
+        json_mode = False
+
     if args_lmm.api == "openai":
         from apis import openai_api
-        assert args_lmm.video_representation == "frames"
+        assert args_lmm.video_representation in ("frames", "first_frame")
         seeds = [args_lmm.seed] * len(batch_prompts_text)
         if verbose:
             logging.info(
-                f"Runnin model {args_lmm.model} on {len(batch_prompts_text)} prompts"
+                f"Running model {args_lmm.model} on {len(batch_prompts_text)} prompts"
             )
         res = openai_api.call_gpt_batch(batch_prompts_text,
                                         batch_prompts_video,
                                         seeds=seeds,
-                                        model=args_lmm.model)
+                                        model=args_lmm.model,
+                                        json_mode=json_mode)
         cost = sum([b[1] for b in res])
         logging.info(f"Cost for lmm differences generation: ${cost:.4f}")
         predictions = [b[0] for b in res]
@@ -135,31 +193,62 @@ def run_lmm(batch_prompts_text: list[str],
                                            seeds=seeds,
                                            model=args_lmm.model,
                                            fps=args_lmm.fps_gemini)
-        predictions = _reformat_malformed_json_prediction([r for r in res[0]])
-        ipdb.set_trace()
-        pass
+        if eval_mode != 1:
+            predictions = _reformat_malformed_json_prediction([r for r in res[0]])
+        else:
+            predictions = [r for r in res[0]]
 
     else:
         raise ValueError(
             f"Have not implemented baseline [{args_lmm.api}] in config")
 
-    predictions = _truncate_too_many_preds(predictions,
-                                           n_differences,
-                                           do_warning=True)
+    if eval_mode == 0:
+        predictions_final = _truncate_too_many_preds(predictions,
+                                                     n_differences,
+                                                     do_warning=True)
+    elif eval_mode == 1:
+        predictions_final = []
+        pattern = r"answer is \(([ab])\)"
+        for pred in predictions:
+            match = re.search(pattern, pred)
+            if match is not None:
+                ans = match.group(1)
+            else:
+                ans = "-1"
+            predictions_final.append(ans)
 
-    ipdb.set_trace()
-    return predictions
+    return predictions_final
+
+def _remove_trailing_commas_json(json_string):
+    """ Some lmm outputs add a trailing string sometimes """
+    # Remove trailing commas from objects
+    json_string = re.sub(r',(\s*})', r'\1', json_string)
+    
+    # Remove trailing comma from the last object in the main object
+    json_string = re.sub(r',(\s*})$', r'\1', json_string)
+    
+    return json_string
 
 
-def _reformat_malformed_json_prediction(malformed_outputs):
+
+def _reformat_malformed_json_prediction(malformed_outputs, skip=False):
+    
+    # run the skip branch if we have high confidence the json will be correct
+    if skip: 
+        predictions = []
+        for pred in malformed_outputs:
+            pred_dict = json.loads(_remove_trailing_commas_json(pred))
+            predictions.append(pred_dict)
+        return predictions
+    
+
     prompts = [
         lp.prompt_reformat_malformed_json.replace("{llm_output}", g)
         for g in malformed_outputs
     ]
-    seeds = [0]*len(prompts)
+    seeds = [0] * len(prompts)
     res = openai_api.call_gpt_batch(prompts, seeds=seeds, model='gpt-4o-mini')
     predictions = [r[0] for r in res]
-    ipdb.set_trace()
 
     return predictions
 

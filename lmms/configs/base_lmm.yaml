@@ -29,5 +29,5 @@ lmm:
   # if fps_warning=True, then log warnings if original fps is not exactly divisible by target fps, or if target fps is higher than original fps
   fps_warning: True   
   n_differences: ${n_differences}
-  max_imgs: 64
+  max_imgs: 500
 

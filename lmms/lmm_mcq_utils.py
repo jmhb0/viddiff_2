@@ -144,6 +144,7 @@ def eval_mcq(dataset, predictions):
         results,
         columns=['sample_key', 'gt', 'pred', 'action', 'name', 'description'])
     acc = (df['pred'] == df['gt']).sum() / len(df)
+    print(acc)
 
     ipdb.set_trace()
     pass

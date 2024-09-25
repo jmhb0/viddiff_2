@@ -2,22 +2,21 @@ project: viddiff
 seed: 0
 debug: 0
 do_eval: 1 
-eval_mode: 0
+eval_mode: 1
 n_differences: data/n_differences.json
 verbose: 1
 
 logging: 
-  name: base_viddiff
+  name: mcq_ab_easy
   results_dir: viddiff_method/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: ${verbose}
 
 data:
-  # split: demo
-  split: fitness 
+  split: easy
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  subset_mode: "3_per_action" # works with "3_per_action" for example
+  subset_mode: "0" # works with "3_per_action" for example
   # subset_mode: "1_per_action" # works with "3_per_action" for example
   # fps: -1
   fps: 4
@@ -26,7 +25,7 @@ data:
 # stage 1
 proposer: 
   api: openai
-  model: gpt-4o-mini 
+  model: gpt-4o
   prompt_key_1_differences: 0
   prompt_key_2_subactions: 0
   prompt_key_3_subaction_filtering: 0
@@ -65,7 +64,7 @@ frame_differencer:
   nframes: 3
   frames_sep_seconds: 0.25      # seconds between successive frames from the same video in caption query
   mode_accumulate_preds: 0 # policy for getting the final prediction
-  model: gpt-4o-mini
+  model: gpt-4o-2024-05-13    
   eval_mode: ${eval_mode} # not sure it's used
   do_eval: ${do_eval}
   seed: ${seed}

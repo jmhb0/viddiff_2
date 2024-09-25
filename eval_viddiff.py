@@ -8,7 +8,6 @@ import copy
 from datasets import Dataset
 from pathlib import Path
 import math
-
 from apis import openai_api
 
 
@@ -20,14 +19,22 @@ def eval_viddiff(dataset: Dataset,
                  diffs_already_matched: bool = False,
                  results_dir=None):
 
+    # if results_dir given, log the raw preds ... add the sample key
+    if results_dir:
+        log_input_preds(dataset, predictions_unmatched, results_dir)
+
+    # check the predictions are in the right form
     validate_prediction_schema(predictions_unmatched, n_differences)
 
-    # first handle the matching
+    # handle the matching
     if not diffs_already_matched:
-        predictions = do_matching(dataset, predictions_unmatched, seed)
+        predictions, predictions_excess = do_matching(dataset,
+                                                      predictions_unmatched,
+                                                      seed)
         predictions = test_reverse_statements(predictions, seed, batch_size=6)
     else:
         predictions = predictions_unmatched
+        predictions_excess = None
         predictions = add_extra_details(dataset, predictions)
 
     # combine the predictions into a dataframe and compute some metrics
@@ -35,11 +42,19 @@ def eval_viddiff(dataset: Dataset,
     metrics = compute_metrics(df)
 
     # logging
-    log(df, metrics, results_dir)
+    log(dataset, df, metrics, predictions_excess, results_dir)
     print(metrics)
-    ipdb.set_trace()
 
     return metrics
+
+
+def log_input_preds(dataset, predictions_unmatched, results_dir):
+    log_preds = {
+        row['sample_key']: v
+        for row, v in zip(dataset, predictions_unmatched)
+    }
+    with open(Path(results_dir) / "input_predictions.json", 'w') as fp:
+        json.dump(log_preds, fp, indent=4)
 
 
 def compute_metrics(df_notfiltered, results_dir=None):
@@ -70,7 +85,7 @@ def compute_metrics(df_notfiltered, results_dir=None):
     return metrics
 
 
-def log(df, metrics, results_dir):
+def log(dataset, df, metrics, predictions_excess, results_dir):
     if results_dir is None:
         return
 
@@ -79,6 +94,13 @@ def log(df, metrics, results_dir):
     # log metrics
     with open(results_dir / "eval_metrics.json", "w") as fp:
         json.dump(metrics, fp, indent=4)
+
+    # predictions that were not logged
+    if predictions_excess is not None:
+        predictions_excess_dict = {
+            row['sample_key']: pred
+            for (row, pred) in zip(dataset, predictions_excess)
+        }
 
     # log matching only
     log_items = []
@@ -149,18 +171,21 @@ def do_matching(dataset, predictions_unmatched, seed):
                                 json.dumps(diff_description_gt))
         prompt = prompt.replace("{differences1}",
                                 json.dumps(diff_description_pred))
-        prompt = prompt.replace("{dict0_keys}",
-                                json.dumps(list(diff_description_gt.keys())))
-        prompt = prompt.replace("{dict1_keys}",
-                                json.dumps(list(diff_description_pred.keys())))
+        prompt = prompt.replace(
+            "{dict0_keys}",
+            json.dumps(sorted(list(diff_description_gt.keys()), key=int)))
+        prompt = prompt.replace(
+            "{dict1_keys}",
+            json.dumps(sorted(list(diff_description_pred.keys()), key=int)))
 
         batch_prompts_text.append(prompt)
 
     seeds = [seed for _ in range(len(batch_prompts_text))]
-    res = openai_api.call_gpt_batch(batch_prompts_text,
-                                    model='gpt-4o-mini',
-                                    overwrite_cache=True,
-                                    seeds=seeds)
+    res = openai_api.call_gpt_batch(
+        batch_prompts_text,
+        model='gpt-4o-mini',
+        # overwrite_cache=True,
+        seeds=seeds)
     cost = sum([b[1] for b in res])
     logging.info(f"Cost for eval difference description matching: ${cost:.4f}")
     matches = [b[0] for b in res]
@@ -193,7 +218,26 @@ def do_matching(dataset, predictions_unmatched, seed):
         # save the content
         predictions.append(pred)
 
-    return predictions
+    # verify that the post-matching object has every gt prediction
+    for row, pred in zip(dataset, predictions):
+        keys_gt = {
+            k
+            for k, v in row['differences_gt'].items() if v is not None
+        }
+        keys_pred = set(pred.keys())
+        assert keys_gt == keys_pred
+
+    # identify 'excess' predictions - preds that were not matched to a gt
+    predictions_excess = []
+    for pred_unmatched, pred in zip(predictions_unmatched, predictions):
+        pred_keys_matched = {v['pred_key'] for k, v in pred.items()}
+        pred_excess = {
+            k: v
+            for k, v in pred_unmatched.items() if k not in pred_keys_matched
+        }
+        predictions_excess.append(pred_excess)
+
+    return predictions, predictions_excess
 
 
 def add_extra_details(dataset, predictions):
@@ -368,6 +412,37 @@ def flip_abc(r):
         return r
 
 
+def eval_mcq_ab(dataset, predictions, results_dir):
+    results = []
+
+    for i, pred in enumerate(predictions):
+        row = dataset[i]
+        sample_key = row['sample_key']
+        differences_gt = {
+            k: v
+            for k, v in row['differences_gt'].items() if v is not None
+        }
+        assert len(differences_gt) == 1
+        differences_annotated = row['differences_annotated']
+
+        # this is a hack - need a better
+        for k, v in differences_gt.items():
+            res = [
+                row['sample_key'], differences_gt[k], pred, row['action'],
+                row['differences_annotated'][k]['name'],
+                row['differences_annotated'][k]['description']
+            ]
+            results.append(res)
+
+    df = pd.DataFrame(
+        results,
+        columns=['sample_key', 'gt', 'pred', 'action', 'name', 'description'])
+    # discard samples where 'gt' == 'c'
+    df = df[df['gt'] != 'c']
+    acc = (df['pred'] == df['gt']).sum() / len(df)
+    print(acc)
+
+
 prompt_open_eval_matching = """\
 You are analyzing videos of people performing a specific action described as "{action_description}."
 
@@ -409,7 +484,7 @@ Instructions:
 1. For each pair of statements, analyze their logical relationship.
 2. Categorize each pair as follows:
    - Return '0' if the statements are equivalent or very similar in meaning. E.g. "X is bigger than Y" and "X is larger than Y" are similar.
-   - Return '1' if the statements are directly opposite in meaning. E.g. "X is bigger than Y" is opposite to "X is smaller than Y".
+- Return '1' if the statements are directly opposite in meaning. E.g. "X is bigger than Y" is opposite to "X is smaller than Y".
 
 Important Notes:
 - For '1' responses, the statements should be true opposites, not just differences in degree.

@@ -9,7 +9,7 @@ from viddiff_method import config_utils
 from stage1_proposer import Proposer
 from stage2_retriever import Retriever
 from stage3_differencer import Differencer
-from eval_viddiff import eval_viddiff
+import eval_viddiff
 
 logging.basicConfig(level=logging.INFO,
                     format='%(filename)s:%(levelname)s:%(message)s')
@@ -47,18 +47,19 @@ def main(config, name, seed, eval_mode):
     logging.info(f"Running VLM frame differencing")
     frame_diferencer = Differencer(args.frame_differencer, args.logging,
                                         dataset, videos, proposals,
-                                        retrieved_frames, args.eval_mode)
+                                    retrieved_frames, args.eval_mode)
     predictions = frame_diferencer.caption_differences()
 
     logging.info(f"Doing eval")
-    results = eval_viddiff(dataset,predictions_unmatched=predictions,
-                                        eval_mode=args.eval_mode,
-                                        seed=args.seed,
-                                        n_differences=n_differences,
-                                        results_dir=args.logging.results_dir,
-                                        diffs_already_matched=True,
-                                        )
-    print(results)
+    eval_viddiff.eval_mcq_ab(dataset, predictions, args.logging.results_dir)
+    # results = eval_viddiff.eval_viddiff(dataset,predictions_unmatched=predictions,
+    #                                     eval_mode=args.eval_mode,
+    #                                     seed=args.seed,
+    #                                     n_differences=n_differences,
+    #                                     results_dir=args.logging.results_dir,
+    #                                     diffs_already_matched=True,
+    #                                     )
+    # print(results)
     ipdb.set_trace()
     pass
 

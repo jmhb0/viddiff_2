@@ -45,7 +45,7 @@ def load_all_videos(dataset, cache=True, do_tqdm=True):
     First list is video A for each datapoint as a dict with elements 
         path: original path to video 
         fps: frames per second 
-        video: numpy array of the video shape (nframes,3,H,W)
+        video: numpy array of the video shape (nframes,H,W,3)
     Second list is the same but for video B. 
     """
 
@@ -209,7 +209,7 @@ def _subsample_video(video: np.ndarray,
                      fps_target: int,
                      fps_warning: bool = True):
     """ 
-    video: video as numby array (nframes, 3, h, w)
+    video: video as numby array (nframes, h, w, 3)
     fps_original: original fps of the video 
     fps_target: target fps to downscale to
     fps_warning: if True, then log warnings to logger if the target fps is 

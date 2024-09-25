@@ -17,12 +17,13 @@ N_DIFF_MIN = 5
 results_dir = Path("scripts/results/dataset_properties")
 results_dir.mkdir(exist_ok=True, parents=True)
 
-if 0:
+if 1:
     metas = {}
-    for split in ['easy', 'fitness', 'music', 'surgery', 'demo', 'ballsports',]:
+    for split in ['music', 'diving', 'easy', 'fitness', 'surgery', 'demo', 'ballsports',]:
         print(split)
         meta = {}
         dataset = lvd.load_viddiff_dataset([split])
+        ipdb.set_trace()
         videos0, videos1 = lvd.load_all_videos(dataset, do_tqdm=True)
         videos = videos0 + videos1
 
@@ -32,6 +33,18 @@ if 0:
         seconds = [n / f for (n, f) in zip(nframes, fps)]
         heights = [v['video'].shape[1] for v in videos]
         widths = [v['video'].shape[2] for v in videos]
+
+        # count actions 
+        num_actions = len(set(dataset['action']))
+        unique_variations = set()
+        for row in dataset:
+            action = row['action']
+            variation_names = { f"{action}_{v['name']}" for k,v in row['differences_annotated'].items() if v is not None}
+            unique_variations = unique_variations | variation_names
+        num_variations = len(unique_variations)
+
+
+
 
         fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(1, 5, figsize=(25, 5))
         fig.suptitle(f'Split: {split}, num pairs: {len(videos)//2}', fontsize=16)
@@ -72,6 +85,11 @@ if 0:
         meta['width'] = np.median(widths)
         meta['n_differences_all'] = n_differences_all
         meta['n_differences_all_target'] = n_differences_all_target
+        meta['num_samples'] = len(dataset)
+        meta['num_actions'] = num_actions
+        meta['num_samples_p_action'] = len(dataset) / num_actions
+        meta['num_dataset'] = len(dataset)
+        meta['num_variations'] = num_variations
 
         metas[split] = meta
 

@@ -13,6 +13,7 @@ import copy
 from collections import defaultdict
 import time
 import logging
+import re
 
 from apis.openai_api import call_gpt, call_gpt_batch
 from viddiff_method import prompts as prompt_templates
@@ -38,7 +39,7 @@ class Differencer():
     """
 
     def __init__(self, args, args_logging, dataset, videos, proposals,
-                 retrieved_frames):
+                 retrieved_frames, eval_mode):
         self.args = args
         self.args_logging = args_logging
         self.dataset = dataset
@@ -46,6 +47,7 @@ class Differencer():
         self.videos1 = videos[1]
         self.proposals = proposals
         self.retrieved_frames = retrieved_frames
+        self.eval_mode = eval_mode
 
         # logging subdirectory
         self.results_subdir = Path(
@@ -121,19 +123,35 @@ class Differencer():
                 prompts_frames.append(frames_0 + frames_1)
 
                 ## make the text prompts
+                # single frame prompt
                 if len(frames_0) == 1:
-                    prompt = prompt_templates.lookup_prompts_differencing_1_frame[
-                        self.args.prompt_key]
+                    if self.eval_mode != 1:
+                        prompt = prompt_templates.lookup_prompts_differencing_1_frame[
+                            self.args.prompt_key]
+                    else:
+                        prompt = prompt_templates.prompt_template_mcq_ab_singlefrmae
+
                     num_frames = 1
                     time_diff = None
+                    prompt = prompt.replace(
+                        "{query_string}",
+                        proposal.differences[difference_idx]['description'])
+
+                # multiframe prompt
                 else:
-                    prompt = prompt_templates.lookup_prompts_differencing_multiframe[
-                        self.args.prompt_key_multiframe]
+                    if self.eval_mode != 1:
+                        prompt = prompt_templates.lookup_prompts_differencing_multiframe[
+                            self.args.prompt_key_multiframe]
+                    else:
+                        prompt = prompt_templates.prompt_template_mcq_ab_multifrmae
                     num_frames = len(frames_0)
                     frame_sep = frame_idxs_video0[1] - frame_idxs_video0[0]
                     time_diff = frame_sep / fps0
                     prompt = prompt.replace("{num_frames}", str(num_frames))
                     prompt = prompt.replace("{time_diff}", f"{time_diff:.2f}")
+                    prompt = prompt.replace(
+                        "{query_string}",
+                        proposal.differences[difference_idx]['description'])
 
                 query_string = proposal.differences[difference_idx][
                     'query_string']
@@ -192,13 +210,16 @@ class Differencer():
                 batch_texts.append(text)
                 batch_frames.append(imgs)
                 batch_idx += 1
+        # ipdb.set_trace()
 
         logging.info(f"Calling GPT batch mode: {len(batch_texts)} queries")
 
         start = time.time()
         # kwargs_gpt['overwrite_cache'] = True
+        json_mode = True if self.eval_mode != 1 else False
         vlm_results_batch = call_gpt_batch(texts=batch_texts,
                                            imgs=batch_frames,
+                                           json_mode=json_mode,
                                            **kwargs_gpt)
         duration = time.time() - start
         logging.info(f"time taken: {int(duration)}s")
@@ -259,12 +280,16 @@ class Differencer():
             gt_label_this_difference = differences_gt_all[difference_idx]
 
         # log files
+        # yapf: disable
         preds_log = {
             "difference_idx": difference_idx,
             "text_prompt": text,
             "response": msg,
             "gt_label_this_difference": gt_label_this_difference,
+            # very hacky way to get this for logging ... mybad
+            "difference_description" :self.proposals[key]['differences'][difference_idx]['description'],
         }
+        # yapf: enable
         with open(f_response, 'w') as f:
             json.dump(preds_log, f, indent=4)
 
@@ -281,11 +306,27 @@ class Differencer():
 
         Required output object `preds` is a dict, preds
         """
-        # the final prediction objects. `Verbose` just returns more stuff
+        # this list is what we send to the evaluator
+        self.predictions_for_eval = []
+
+        # for eval_mode 1, we have unstructured response: a or b
+        if self.eval_mode == 1:
+            pattern = r"answer is \(([ab])\)"
+            for sample_key, preds_vlm in self.samples_preds_vlm.items():
+                # just get the string e.g. "the answer is (a)"
+                pred = preds_vlm[0]['response'][0]
+                match = re.search(pattern, pred)
+                if match is not None:
+                    ans = match.group(1)
+                else:
+                    ans = "a"
+
+                self.predictions_for_eval.append(ans)
+            return
+
+        # I forgot if these two objects are important as well ...
         self.sample_predictions = {}
         self.sample_predictions_verbose = {}
-
-        self.predictions_for_eval = []
 
         # loop over sample
         for sample_key, preds_vlm in self.samples_preds_vlm.items():
@@ -294,7 +335,8 @@ class Differencer():
             # loop over the vlm cals within one sample
             for pred_vlm in preds_vlm:
                 difference_key = pred_vlm['difference_idx']
-                pred_vlm['pred'] = _force_pred(pred_vlm['response'][0]['answer'])
+                pred_vlm['pred'] = _force_pred(
+                    pred_vlm['response'][0]['answer'])
                 # pred_vlm['pred_detail'] = pred_vlm['response'][0][
                 #     'answer_detailed']
                 self.sample_predictions[sample_key][difference_key] = pred_vlm
@@ -302,19 +344,21 @@ class Differencer():
             pred_eval = {
                 pred_vlm['difference_idx']: {
                     'prediction': pred_vlm['pred'],
-                    'description' : '',
+                    'description': pred_vlm['difference_description'],
                 }
                 for pred_vlm in preds_vlm
             }
             self.predictions_for_eval.append(pred_eval)
 
+
 def _force_pred(r):
     """in case of llm failure which happens sometimes """
-    if r in ('a','b','c'):
-        return r 
-    else: 
+    if r in ('a', 'b', 'c'):
+        return r
+    else:
         logging.warning(f"Forced pred, input was {r}")
         return 'a'
+
 
 def vote_on_predictions(lst, priority_order=['a', 'b', 'c', 'd']):
     """ 

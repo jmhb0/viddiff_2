@@ -173,8 +173,8 @@ def call_gemini(
             if video_file.state.name == "FAILED":
                 raise ValueError(video_file.state.name)
 
-    model = genai.GenerativeModel(model_name=model)
-    response = model.generate_content(content_call,
+    gemini_model = genai.GenerativeModel(model_name=model)
+    response = gemini_model.generate_content(content_call,
                                       request_options={"timeout": 600})
 
     prompt_tokens = response.usage_metadata.prompt_token_count
@@ -186,11 +186,12 @@ def call_gemini(
         with cache_lock:
             cache_utils.save_to_cache(cache_key, msg, cache_gemini)
 
-    response = dict(prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens)
-
     if os.path.exists(video_file_name):
         os.remove(video_file_name)
+
+    price = compute_api_call_cost(prompt_tokens,
+                                  completion_tokens,
+                                  model=model)
 
     return msg, response
 
@@ -204,7 +205,7 @@ def call_gemini_batch(texts, videos, seeds, **kwargs):
     responses = []
 
     # code for doing it in serial
-    logging.info(f"Running Gemini not in parallel")
+    logging.info(f"Running Gemini NOT in parallel")
     for i in trange(n):
         msg, res = call_gemini(texts[i], videos[i], seeds[i], **kwargs)
         msgs.append(msg)
@@ -231,6 +232,42 @@ def call_gemini_batch(texts, videos, seeds, **kwargs):
     #         results.append(list(future.result()))
 
     return msgs, responses
+
+
+def compute_api_call_cost(
+    prompt_tokens: int,
+    completion_tokens: int,
+    model="models/gemini-1.5-pro",
+):
+    """
+    Warning: prices need to be manually updated from
+    https://openai.com/api/pricing/
+    """
+    prices_per_million_input = {
+        "models/gemini-1.5-pro": 3.50,
+        "models/gemini-1.5-flash": 0.075,
+        # "gpt-4o-mini": 0.15,
+        # "gpt-4o": 5,
+        # "gpt-4-turbo": 10,
+        # "gpt-4": 30,
+        # "gpt-3.5-turbo": 0.5
+    }
+    prices_per_million_output = {
+        "models/gemini-1.5-pro": 10.50,
+        "models/gemini-1.5-flash": 0.30,
+        # "gpt-4o-mini": 0.075,
+        # "gpt-4o": 15,
+        # "gpt-4-turbo": 30,
+        # "gpt-4": 60,
+        # "gpt-3.5-turbo": 1.5
+    }
+    key = model
+
+    price = prompt_tokens * prices_per_million_input[
+        key] + completion_tokens * prices_per_million_output[key]
+    price = price / 1e6
+
+    return price
 
 
 if __name__ == "__main__":

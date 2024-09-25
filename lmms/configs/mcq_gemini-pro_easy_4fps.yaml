@@ -5,7 +5,7 @@ do_eval: 1
 eval_mode: 1
 
 logging: 
-  name: mcq_gpt-4o-mini_easy_4fps
+  name: mcq_gemini-pro_easy_8fps_2geminifps
   results_dir: lmms/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: 1 
@@ -15,12 +15,13 @@ data:
   split: easy
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  subset_mode: "2_per_action"
+  subset_mode: "0"
 
 lmm:
-  api: openai
+  api: gemini 
   fps: 8
-  model: gpt-4o-mini
-  video_representation: frames
+  fps_gemini: 2
+  model: models/gemini-1.5-pro
+  # model: models/gemini-1.5-flash
+  video_representation: video
   seed: ${seed}
-  max_imgs: 140

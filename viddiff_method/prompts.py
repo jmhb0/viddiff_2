@@ -246,4 +246,29 @@ Answer in json:  {'answer':"a|b"}""",
 
 }
 
+prompt_template_mcq_ab_singlefrmae = """\
+I have two videos of people performing an action with description: "{action}".
+The first frame is from video a, and the second frame is from video b.
+
+Here is a difference that describe how the action can be performed differently:
+"{query_string}"
+
+Your task is to predict whether the difference is more true for video 'a' or video 'b'.
+If video 'a', then write "The answer is (a)".
+If video 'b', then write "The answer is (b)".
+"""
+prompt_template_mcq_ab_multifrmae = """\
+I have two videos of people performing an action with description: "{action}".
+The first {num_frames} frames are from video A and the last {num_frames} frames are from video B.
+For each video, the frames are very close together in the video: they are {time_diff} seconds apart.
+
+Here is a difference that describe how the action can be performed differently:
+"{query_string}"
+
+Your task is to predict whether the difference is more true for video 'a' or video 'b'.
+If video 'a', then write "The answer is (a)".
+If video 'b', then write "The answer is (b)".
+"""
+
+
 
