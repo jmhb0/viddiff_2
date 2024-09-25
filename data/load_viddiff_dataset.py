@@ -12,6 +12,9 @@ from tqdm import tqdm
 import logging
 import hashlib
 
+import sys 
+sys.path.insert(0,"")
+
 
 def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
     """
@@ -219,9 +222,9 @@ def _subsample_video(video: np.ndarray,
     subsample_time = fps_original / fps_target
 
     if subsample_time < 1 and fps_warning:
-        logging.warning(f"Config lmm.video_representation='{video_representation}' " \
-            f"for an fps of {fps_target}, which is higher than the fps of the original " \
-            f"video which is {video['fps']}. The video fps won't be changed for {video['path']}. "\
+        logging.warning(f"Trying to subsample frames to fps {fps_target}, which "\
+            "is higher than the fps of the original video which is "\
+            "{video['fps']}. The video fps won't be changed for {video['path']}. "\
             f"\nSupress this warning by setting config fps_warning=False")
         return video, fps_original, 1
 

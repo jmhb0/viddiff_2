@@ -4,6 +4,9 @@ from typing import Dict, List, Tuple
 import logging
 from line_profiler import LineProfiler
 
+import sys 
+sys.path.insert(0, "")
+
 from data import load_viddiff_dataset as lvd
 from viddiff_method import config_utils
 from stage1_proposer import Proposer
@@ -11,8 +14,13 @@ from stage2_retriever import Retriever
 from stage3_differencer import Differencer
 from eval_viddiff import eval_viddiff
 
+logging.getLogger('openai').setLevel(logging.WARNING)
 logging.basicConfig(level=logging.INFO,
                     format='%(filename)s:%(levelname)s:%(message)s')
+logging.getLogger("openai").setLevel(logging.ERROR)
+logging.getLogger("_client").setLevel(logging.ERROR)
+
+
 
 
 # yapf: disable

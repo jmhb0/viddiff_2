@@ -157,6 +157,7 @@ def do_matching(dataset, predictions_unmatched, seed):
         keys_keep = differences_gt.keys()
 
         prompt = prompt_open_eval_matching
+        prompt = prompt.replace("{final}", f'{len(differences_gt)-1}')
         prompt = prompt.replace("{action_description}",
                                 row['action_description'])
         diff_description_gt = {
@@ -181,9 +182,11 @@ def do_matching(dataset, predictions_unmatched, seed):
         batch_prompts_text.append(prompt)
 
     seeds = [seed for _ in range(len(batch_prompts_text))]
+    logging.info("GPT call: matching")
     res = openai_api.call_gpt_batch(
         batch_prompts_text,
-        model='gpt-4o-mini',
+        model='gpt-4o-2024-08-06',
+        # model='gpt-4o-mini',
         # overwrite_cache=True,
         seeds=seeds)
     cost = sum([b[1] for b in res])
@@ -298,6 +301,7 @@ def test_reverse_statements(predictions, seed, batch_size=20):
 
     # run the prompts
     seeds = [seed for _ in range(len(batch_prompts_text))]
+    logging.info("GPT call: checking 'is_opposite'")
     res = openai_api.call_gpt_batch(batch_prompts_text,
                                     seeds=seeds,
                                     model="gpt-4o-mini")
@@ -472,8 +476,12 @@ Example output format:
     "2": "1",
     "3": "5",
     ...
+    "{final}" : "0"
 }
+Important: the keys in this dictionary should be" {dict0_keys}
 """
+
+
 
 prompt_open_eval_check_opposite = """\
 You will be given pairs of statements to compare. 

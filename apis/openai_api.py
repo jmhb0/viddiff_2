@@ -6,7 +6,7 @@ Models: https://platform.openai.com/docs/models/gpt-4-and-gpt-4-turbo
 import ipdb
 import base64
 import asyncio
-from openai import OpenAI, AsyncOpenAI, ChatCompletion
+import openai
 from pathlib import Path
 import decord
 from PIL import Image
@@ -22,19 +22,29 @@ import logging
 import concurrent.futures
 from threading import Lock
 import time
-import tqdm
+from tqdm import tqdm
+import redis
 
 import sys
+httpx_logger = logging.getLogger("httpx")
+httpx_logger.setLevel(logging.WARNING)
 
 sys.path.insert(0, "..")
 sys.path.insert(0, ".")
 from cache import cache_utils
+# from cache import cache_utils_redis as cache_utils
 
-client = OpenAI()
-# cache_openai = lmdb.open("cache/cache_openai_", map_size=int(1e12))
+client = openai.OpenAI()
 cache_openai = lmdb.open("cache/cache_openai", map_size=int(1e12))
 cache_lock = Lock()
 
+# logging.getLogger("openai").setLevel(logging.ERROR)
+# logging.getLogger("_client").setLevel(logging.ERROR)
+
+
+
+# cache_openai = redis.Redis(host="localhost", port=6379, db=0)
+# cache_openai.config_set("save", "60 1")
 
 def call_gpt(
     # args for setting the `messages` param
@@ -196,6 +206,7 @@ def call_gpt_batch(texts,
             if json_modes is not None:
                 all_kwargs[i]['json_mode'] = json_modes[i]
 
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=128) as executor:
         futures = []
 
@@ -205,6 +216,7 @@ def call_gpt_batch(texts,
 
         # run
         results = [list(future.result()) for future in futures]
+ 
 
     if get_meta:
         for i, (msg, tokens) in enumerate(results):
@@ -267,13 +279,13 @@ if __name__ == "__main__":
     sys.path.insert(0, "..")
     sys.path.insert(0, ".")
 
-    text0 = "How did Steve Irwin die?"
+    text0 = "How did Steve Irwin die? "
     # text1 = "how many chucks could a wood chuck chuck?"
     # text2 = "who has the best llm?"
 
     model = "gpt-4o-mini"
     print(model)
     msg, res = call_gpt(text0, model=model, cache=True, json_mode=False)
-# res = call_gpt_batch([text0, text1], cache=False, json_mode=False)
+    # res = call_gpt_batch([text0, text1], cache=False, json_mode=False)
     ipdb.set_trace()
     pass

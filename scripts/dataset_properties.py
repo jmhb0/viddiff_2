@@ -23,7 +23,6 @@ if 1:
         print(split)
         meta = {}
         dataset = lvd.load_viddiff_dataset([split])
-        ipdb.set_trace()
         videos0, videos1 = lvd.load_all_videos(dataset, do_tqdm=True)
         videos = videos0 + videos1
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# for fname in  "gemini-pro_fitness_8fps_1geminifps.yaml" "gemini-pro_ballsports_10fps_1geminifps.yaml" "gemini-pro_surgery_10fps_1geminifps.yaml" "gemini-pro_music_10fps_1geminifps.yaml"; do 
-for fname in  "gemini-pro_easy_8fps_1geminifps.yaml" ; do 
+for fname in  "gemini-pro_easy_8fps_1geminifps.yaml" "gemini-pro_fitness_8fps_1geminifps.yaml" "gemini-pro_ballsports_10fps_1geminifps.yaml" "gemini-pro_surgery_5fps_1geminifps.yaml" "gemini-pro_music_5fps_1geminifps.yaml"; do 
+# for fname in  "gemini-pro_easy_8fps_1geminifps.yaml" ; do 
     # Remove .yaml extension for the log file name
     log_base=${fname%.yaml}
     
@@ -17,9 +17,8 @@ for fname in  "gemini-pro_easy_8fps_1geminifps.yaml" ; do
     echo "python lmms/run_lmm.py -c lmms/configs/${fname}"
     python lmms/run_lmm.py -c lmms/configs/${fname} 2>&1 | tee "${log_file}"
     
-    # Sleep for 60 seconds
     echo 
-    sleep 5
+    sleep 1
 done
 
 

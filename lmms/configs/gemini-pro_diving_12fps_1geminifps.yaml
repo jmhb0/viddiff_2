@@ -1,0 +1,27 @@
+project: viddiff_0
+seed: 0
+debug: 0
+do_eval: 1 
+eval_mode: 0
+
+logging: 
+  name: gemini-pro_diving_12fps_1geminifps 
+  results_dir: lmms/results/${logging.name}/seed_${seed}
+  overwrite_ok: True
+  verbose: 1 
+
+data:
+  # split: demo
+  split: diving
+  debug: ${debug}
+  eval_mode: ${eval_mode}  
+  subset_mode: "6_per_action"
+
+lmm:
+  api: gemini 
+  fps: 12
+  fps_gemini: 1
+  model: models/gemini-1.5-pro
+  # model: models/gemini-1.5-flash
+  video_representation: video
+  seed: ${seed}

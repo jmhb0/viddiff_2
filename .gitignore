@@ -19,6 +19,7 @@ profiling_results.txt
 viddiff
 *npy
 *requirements.txt
+*rdb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -120,6 +120,7 @@ class Proposer():
             sample_keys.append(sample['sample_key'])
 
         # call gpt for differences
+        logging.info("GPT call: generating differences")
         llm_batch = openai_api.call_gpt_batch(batch_texts,
                                               model=self.args.model,
                                               seeds=batch_seeds)
@@ -131,9 +132,9 @@ class Proposer():
         # enforce max n_differences
         for res, n_diff in zip(responses, self.n_differences):
             if len(res) > n_diff:
-                res = dict(list(res.items())[:n_diff])
-                logging.warning(f"\nA proposal had [{len(res)}'' differences " \
+                logging.warning(f"\nA proposal had [{len(res)}] differences " \
                 f"but max allowed is {n_diff}")
+                res = dict(list(res.items())[:n_diff])
 
         # log results to object and to file
         self.responses_1_differences = dict(zip(sample_keys, responses))
@@ -170,7 +171,8 @@ class Proposer():
             batch_texts.append(prompt_subactions)
             batch_seeds.append(seed)
 
-        # run llm
+        # run 
+        logging.info("GPT call: generating subactions")
         llm_batch = openai_api.call_gpt_batch(
             batch_texts,
             seeds=batch_seeds,
@@ -205,6 +207,7 @@ class Proposer():
                     "{stages}", json.dumps(response_old, indent=4))
                 batch_texts.append(prompt_refine)
 
+            logging.info("GPT call: filtering retrieval keys")
             llm_batch = openai_api.call_gpt_batch(batch_texts,
                                                   model=self.args.model,
                                                   seed=self.args.seed)
@@ -245,6 +248,7 @@ class Proposer():
             batch_texts.append(prompt_linking)
 
         # call llm
+        logging.info("GPT call: linking")
         llm_batch = openai_api.call_gpt_batch(
             batch_texts,
             model=self.args.model,
@@ -346,7 +350,7 @@ class Proposer():
             self.proposals[sample['sample_key']] = proposal
 
     def _validate_linking_operations(self, differences, links):
-        ipdb.set_trace()
+        # ipdb.set_trace()
         pass
 
     def match_differences(self):

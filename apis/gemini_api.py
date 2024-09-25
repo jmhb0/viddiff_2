@@ -106,7 +106,6 @@ def call_gemini(
     """ 
     models: ["models/gemini-1.5-flash", "models/gemini-1.5-pro"]
     """
-    # print("running ", model)
     if isinstance(system_prompt, str):
         text: str = system_prompt + " " + text
 

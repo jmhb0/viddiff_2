@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# for fname in "gpt-4o_ballsports_10fps.yaml" "gpt-4o_fitness_8fps.yaml" "gpt-4o_music_10fps.yaml" "gpt-4o_surgery_10fps.yaml"; do
-for fname in "gpt-4o_music_3fps.yaml" "gpt-4o_surgery_3fps.yaml" ; do
+for fname in "gpt-4o_easy_8fps.yaml" "gpt-4o_ballsports_10fps.yaml" "gpt-4o_fitness_8fps.yaml" "gpt-4o_music_3fps.yaml" "gpt-4o_surgery_3fps.yaml"; do
+# for fname in "gpt-4o_music_3fps.yaml" "gpt-4o_surgery_3fps.yaml" ; do
+# for fname in "gpt-4o_easy_8fps.yaml" ;
     # Remove .yaml extension for the log file name
     log_base=${fname%.yaml}
     
@@ -15,6 +16,6 @@ for fname in "gpt-4o_music_3fps.yaml" "gpt-4o_surgery_3fps.yaml" ; do
 
     eval "$python_command" 2>&1 | tee "${log_file}"
     
-    sleep 5
-    echo
+    # sleep 2
+    # echo
 done
