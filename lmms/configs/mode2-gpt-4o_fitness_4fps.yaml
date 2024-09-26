@@ -2,23 +2,23 @@ project: viddiff_0
 seed: 0
 debug: 0
 do_eval: 1 
-eval_mode: 0
+eval_mode: 2
 
 logging: 
-  name: gpt-4o_surgery_3fps
+  name: mode2-gpt-4o_fitness_4fps
   results_dir: lmms/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: 1 
 
 data:
-  split: surgery
+  split: fitness
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  subset_mode: "8_per_action"
+  subset_mode: "0"
 
 lmm:
   api: openai
-  fps: 3
+  fps: 4
   model: gpt-4o-2024-05-13
   video_representation: frames
   seed: ${seed}

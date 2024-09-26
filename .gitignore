@@ -20,6 +20,7 @@ viddiff
 *npy
 *requirements.txt
 *rdb
+*tmp.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

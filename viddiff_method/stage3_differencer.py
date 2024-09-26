@@ -219,6 +219,7 @@ class Differencer():
         json_mode = True if self.eval_mode != 1 else False
         vlm_results_batch = call_gpt_batch(texts=batch_texts,
                                            imgs=batch_frames,
+                                           overwrite_cache=True,
                                            json_mode=json_mode,
                                            **kwargs_gpt)
         duration = time.time() - start

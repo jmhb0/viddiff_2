@@ -45,14 +45,14 @@ class Retriever():
         self.results_subdir.mkdir(exist_ok=True, parents=True)
 
     def retrieve_frames(self):
-        if self.args.eval_mode in (2, ):
-            logging.info(f"eval mode {self.args.eval_mode}, getting gt frames")
-            self.get_gt_frames()
-        else:
-            self.get_clip_text_embeddings()
-            self.get_clip_text_frame_similarity()
-            self.do_temporal_segmentation()
-            self.map_segmentation_to_frames()
+        # if self.args.eval_mode in (2, ):
+        #     logging.info(f"eval mode {self.args.eval_mode}, getting gt frames")
+        #     self.get_gt_frames()
+        # else:
+        self.get_clip_text_embeddings()
+        self.get_clip_text_frame_similarity()
+        self.do_temporal_segmentation()
+        self.map_segmentation_to_frames()
 
         if self.args.do_random_retrieval:
             self.randomize_retrievals()

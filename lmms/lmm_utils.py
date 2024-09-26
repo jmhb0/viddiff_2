@@ -42,7 +42,17 @@ def make_text_prompts(dataset: Dataset, videos: tuple, n_differences: list,
             n_differences = [None] * len(dataset)
 
         elif eval_mode == 2:
-            raise NotImplementedError()
+            keys_gt = {
+                k
+                for k, v in row['differences_gt'].items() if v in ('a', 'b')
+            }
+            differences_annotated = row['differences_annotated']
+            differences_annotated = {
+                k: v['description']
+                for (k, v) in differences_annotated.items() if k in keys_gt
+            }
+
+            n_differences = [None] * len(dataset)
 
         else:
             raise ValueError()
@@ -81,13 +91,24 @@ def make_prompt(action_description: str,
             "{differences_annotated}",
             json.dumps(differences_annotated, indent=2))
     elif eval_mode == 2:
-        raise NotImplementedError()
+        prompt_text = lp.prompt_template_mode_2
+        prompt_text = prompt_text.replace(
+            "{differences_annotated}",
+            json.dumps(differences_annotated, indent=2))
+        target = {
+            k: {
+                'description': v,
+                'prediction': "a|b"
+            }
+            for k, v in differences_annotated.items()
+        }
+        prompt_text = prompt_text.replace("{target_out}", json.dumps(target, indent=2))
+        
     else:
         raise ValueError()
 
     prompt_text = prompt_text.replace("{action_description}",
                                       action_description)
-
 
     # all videos have tha subsampling step
     assert type(args_lmm.fps) is int
@@ -110,7 +131,7 @@ def make_prompt(action_description: str,
         for video in (video0, video1):
             nframes.append(len(video['video']))
             fps_new_images.append(fps_new)
-            prompt_videos += list(video['video'])        
+            prompt_videos += list(video['video'])
 
         assert fps_new_images[0] == fps_new_images[1]
 
@@ -160,7 +181,7 @@ def run_lmm(batch_prompts_text: list[str],
     of images, so the `batch_prompts_video` is actually a list of images, and the
     text prompts in `batch_prompts_text` should explain that.
     """
-    if eval_mode == 0:
+    if eval_mode in (0, 2):
         assert n_differences is not None
         json_mode = True
     else:
@@ -194,7 +215,8 @@ def run_lmm(batch_prompts_text: list[str],
                                            model=args_lmm.model,
                                            fps=args_lmm.fps_gemini)
         if eval_mode != 1:
-            predictions = _reformat_malformed_json_prediction([r for r in res[0]])
+            predictions = _reformat_malformed_json_prediction(
+                [r for r in res[0]])
         else:
             predictions = [r for r in res[0]]
 
@@ -217,30 +239,32 @@ def run_lmm(batch_prompts_text: list[str],
                 ans = "-1"
             predictions_final.append(ans)
 
+    elif eval_mode == 2:
+        predictions_final = predictions
+
     return predictions_final
+
 
 def _remove_trailing_commas_json(json_string):
     """ Some lmm outputs add a trailing string sometimes """
     # Remove trailing commas from objects
     json_string = re.sub(r',(\s*})', r'\1', json_string)
-    
+
     # Remove trailing comma from the last object in the main object
     json_string = re.sub(r',(\s*})$', r'\1', json_string)
-    
+
     return json_string
 
 
-
 def _reformat_malformed_json_prediction(malformed_outputs, skip=False):
-    
+
     # run the skip branch if we have high confidence the json will be correct
-    if skip: 
+    if skip:
         predictions = []
         for pred in malformed_outputs:
             pred_dict = json.loads(_remove_trailing_commas_json(pred))
             predictions.append(pred_dict)
         return predictions
-    
 
     prompts = [
         lp.prompt_reformat_malformed_json.replace("{llm_output}", g)
@@ -265,11 +289,7 @@ def _truncate_too_many_preds(predictions, n_differences: list[int],
                 logging.warning(f"Max {n_differences[i]} differences allowed, but "\
                     f"prediction {i} has {len(pred)}. Doing naive truncation.")
 
-            pred = {
-                k: v
-                for num, (k, v) in enumerate(pred.items())
-                if num < n_differences
-            }
+            predictions[i] = dict(list(pred.items())[:n_differences[i]])
 
     # double check that it worked
     assert all([

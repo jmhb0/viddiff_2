@@ -5,20 +5,23 @@ do_eval: 1
 eval_mode: 0
 
 logging: 
-  name: gpt-4o_surgery_3fps
+  name: gemini-pro_music_1fps_1geminifps
   results_dir: lmms/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: 1 
 
 data:
-  split: surgery
+  # split: demo
+  split: music
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  subset_mode: "8_per_action"
+  subset_mode: "6_per_action"
 
 lmm:
-  api: openai
-  fps: 3
-  model: gpt-4o-2024-05-13
-  video_representation: frames
+  api: gemini 
+  fps: 1
+  fps_gemini: 1
+  model: models/gemini-1.5-pro
+  # model: models/gemini-1.5-flash
+  video_representation: video
   seed: ${seed}

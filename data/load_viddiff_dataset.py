@@ -12,8 +12,6 @@ from tqdm import tqdm
 import logging
 import hashlib
 
-import sys 
-sys.path.insert(0,"")
 
 
 def load_viddiff_dataset(splits=["easy"], subset_mode="0"):

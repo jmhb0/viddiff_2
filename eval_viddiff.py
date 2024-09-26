@@ -23,11 +23,17 @@ def eval_viddiff(dataset: Dataset,
     if results_dir:
         log_input_preds(dataset, predictions_unmatched, results_dir)
 
-    # check the predictions are in the right form
-    validate_prediction_schema(predictions_unmatched, n_differences)
+    # this deals with some edge case dw about it
+    if eval_mode == 2:
+        clean_evalmode2(dataset, predictions_unmatched)
 
-    # handle the matching
-    if not diffs_already_matched:
+    # check the predictions are in the right form
+    predictions_unmatched = validate_prediction_schema(predictions_unmatched,
+                                                       n_differences,
+                                                       eval_mode)
+
+    if eval_mode == 0 and not diffs_already_matched:
+        # do LLM-based matching
         predictions, predictions_excess = do_matching(dataset,
                                                       predictions_unmatched,
                                                       seed)
@@ -35,7 +41,7 @@ def eval_viddiff(dataset: Dataset,
     else:
         predictions = predictions_unmatched
         predictions_excess = None
-        predictions = add_extra_details(dataset, predictions)
+        predictions = add_gt_and_details(dataset, predictions)
 
     # combine the predictions into a dataframe and compute some metrics
     df = make_eval_df(dataset, predictions)
@@ -77,10 +83,10 @@ def compute_metrics(df_notfiltered, results_dir=None):
 
     assert math.isclose(err_flippedpred + err_nomatch + err_is_c, 1 - recall)
 
-    metrics = dict(recall=recall,
-                   err_nomatch=err_nomatch,
-                   err_flippedpred=err_flippedpred,
-                   err_is_c=err_is_c)
+    metrics = dict(recall=float(recall),
+                   err_nomatch=float(err_nomatch),
+                   err_flippedpred=float(err_flippedpred),
+                   err_is_c=float(err_is_c))
 
     return metrics
 
@@ -122,12 +128,13 @@ def log(dataset, df, metrics, predictions_excess, results_dir):
 
 
 def validate_prediction_schema(predictions_unmatched: list[dict],
-                               n_differences: list[int]):
+                               n_differences: list[int], eval_mode):
     # check the max number of differences was not exceeded
-    for i, preds in enumerate(predictions_unmatched):
-        if len(preds) > n_differences[i]:
-            raise ValueError(f"Maximum number of allowed differences is {n_differences[i]} "\
-                f"but prediction number {i} has {len(preds)}: \n{preds}.")
+    if eval_mode == 0:
+        for i, preds in enumerate(predictions_unmatched):
+            if len(preds) > n_differences[i]:
+                raise ValueError(f"Maximum number of allowed differences is {n_differences[i]} "\
+                    f"but prediction number {i} has {len(preds)}: \n{preds}.")
 
     # check that each prediction is one of 'a' or 'b'
     for pred in predictions_unmatched:
@@ -137,6 +144,16 @@ def validate_prediction_schema(predictions_unmatched: list[dict],
             assert 'description' in v.keys()
             if not v['prediction'] in ('a', 'b', 'c'):
                 logging.warning(f"prediction not in (a,b,c) ", v)
+
+    return predictions_unmatched
+
+
+def clean_evalmode2(dataset, predictions_unmatched):
+    for i, (row, pred) in enumerate(zip(dataset, predictions_unmatched)):
+        keys = {k for k, v in row['differences_gt'].items() if v in ('a', 'b')}
+        predictions_unmatched[i] = {k: v for k, v in pred.items() if k in keys}
+
+    return predictions_unmatched
 
 
 def do_matching(dataset, predictions_unmatched, seed):
@@ -243,7 +260,7 @@ def do_matching(dataset, predictions_unmatched, seed):
     return predictions, predictions_excess
 
 
-def add_extra_details(dataset, predictions):
+def add_gt_and_details(dataset, predictions):
     """ """
     for sample, pred in zip(dataset, predictions):
 
@@ -258,6 +275,7 @@ def add_extra_details(dataset, predictions):
         assert set(keys_gt) == set(pred.keys())
 
         # add the extra info that would have been added by the matching
+        # ipdb.set_trace()
         for k in pred.keys():
             pred[k]['pred'] = pred[k]['prediction']
             del pred[k]['prediction']
@@ -272,7 +290,7 @@ def add_extra_details(dataset, predictions):
     return predictions
 
 
-def test_reverse_statements(predictions, seed, batch_size=20):
+def test_reverse_statements(predictions, seed, batch_size):
     """ 
     Test if it's opposite. 
     If it is the opposite, then flip the prediction
@@ -302,9 +320,11 @@ def test_reverse_statements(predictions, seed, batch_size=20):
     # run the prompts
     seeds = [seed for _ in range(len(batch_prompts_text))]
     logging.info("GPT call: checking 'is_opposite'")
-    res = openai_api.call_gpt_batch(batch_prompts_text,
-                                    seeds=seeds,
-                                    model="gpt-4o-mini")
+    res = openai_api.call_gpt_batch(
+        batch_prompts_text,
+        seeds=seeds,
+        # overwrite_cache=True,
+        model="gpt-4o-mini")
     cost = sum([r[1] for r in res])
     logging.info(f"Cost for eval on 'is_opposite' statement: ${cost:.4f}")
     is_opposite = []
@@ -481,29 +501,56 @@ Example output format:
 Important: the keys in this dictionary should be" {dict0_keys}
 """
 
+# prompt_open_eval_check_opposite = """\
+# You will be given pairs of statements to compare.
+# Your task is to determine whether each pair of statements is equivalent or opposite in meaning.
 
+# Instructions:
 
-prompt_open_eval_check_opposite = """\
-You will be given pairs of statements to compare. 
-Your task is to determine whether each pair of statements is equivalent or opposite in meaning.
+# 1. For each pair of statements, analyze their logical relationship.
+# 2. Categorize each pair as follows:
+#    - Return '0' if the statements are equivalent or very similar in meaning. E.g. "X is bigger than Y" and "X is larger than Y" are similar.
+# - Return '1' if the statements are directly opposite in meaning. E.g. "X is bigger than Y" is opposite to "X is smaller than Y".
+
+# Important Notes:
+# - For '1' responses, the statements should be true opposites, not just differences in degree.
+#   Example: "X is much bigger than Y" and "X is slightly bigger than Y" should be categorized as '0', not '1'.
+
+# Output Format:
+# Provide your response as a JSON object containing an array of "0" or "1" values:
+# {"results" : ["1", "0", "0", ...]}
+
+# Input:
+# The list of statement pairs to analyze will be provided in the following format:
+
+# {statements}
+# """
+
+prompt_open_eval_check_opposite = """
+Task:  
+You will be given pairs of statements. Your task is to determine the logical relationship between each pair.
 
 Instructions:
-
-1. For each pair of statements, analyze their logical relationship.
-2. Categorize each pair as follows:
-   - Return '0' if the statements are equivalent or very similar in meaning. E.g. "X is bigger than Y" and "X is larger than Y" are similar.
-- Return '1' if the statements are directly opposite in meaning. E.g. "X is bigger than Y" is opposite to "X is smaller than Y".
-
-Important Notes:
-- For '1' responses, the statements should be true opposites, not just differences in degree.
-  Example: "X is much bigger than Y" and "X is slightly bigger than Y" should be categorized as '0', not '1'.
+1. Analyze Each Pair: For each pair of statements, carefully analyze their meaning and relationship.
+2. Categorization:
+   - Return "0" if the statements are equivalent, very similar, or differ only in minor details.  
+     Example: "X is bigger than Y" and "X is larger than Y" should both return "0".
+   - Return "1" if the statements are direct opposites in meaning.  
+     Example: "X is bigger than Y" and "X is smaller than Y" should return "1".
+3. Edge Cases:
+   - Avoid returning "1" for statements that are not true opposites, even if they have some differences in detail or degree.
+     Example: "X is much bigger than Y" and "X is slightly bigger than Y" should still return "0".
 
 Output Format:
-Provide your response as a JSON object containing an array of "0" or "1" values:
-{"results" : ["1", "0", "0", ...]}
+- Your response should be a JSON object with a single key "results" and an array of string values "0" or "1" as its value.
+- The array should exactly match the number of statement pairs given in the input.
 
-Input:
-The list of statement pairs to analyze will be provided in the following format:
+Input Format:
+- The list of statement pairs will be provided in the following format:
 
 {statements}
+
+Important Requirements:
+- Ensure that each value in the output array is either "0" or "1".
+- The length of the "results" array must exactly match the number of input pairs. 
 """

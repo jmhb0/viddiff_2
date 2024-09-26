@@ -31,6 +31,7 @@ Return a json like this, replacing '...' with actual content:
 }
 """
 
+# mode 1 
 prompt_template_mcq_ab = """\
 Here are two videos of an action with the following description: "{action_description}".
 {video_representation_description}
@@ -42,6 +43,22 @@ Your task is to predict whether the difference is more true for video 'a' or vid
 If video 'a', then write "The answer is (a)".
 If video 'b', then write "The answer is (b)".
 """
+
+# mode 2 - closed, also a or b 
+prompt_template_mode_2 = """\
+Here are two videos of an action with the following description: "{action_description}".
+{video_representation_description}
+
+
+Below is a set of identified differences that describe how the action be performed differently.
+Each difference is associated with a unique key:
+{differences_annotated}
+
+Your task is to predict, for each difference, whether it is more true for video 'a' or video 'b'. 
+Return your predictions as a JSON object, using the keys above. For each difference, include the description and your prediction ("a" or "b"):
+{target_out}
+"""
+
 
 prompt_template_mcq = """\
 Here are two videos of an action with the following description: "{action_description}".

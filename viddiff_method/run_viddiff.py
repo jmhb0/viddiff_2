@@ -67,12 +67,6 @@ def main(config, name, seed, eval_mode):
                                         diffs_already_matched=True,
                                         )
     print(results)
-    ipdb.set_trace()
-    pass
-
-
-
-
 
 if __name__ == "__main__":
     main()

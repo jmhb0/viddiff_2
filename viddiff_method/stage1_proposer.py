@@ -56,10 +56,7 @@ class Proposer():
             self.query_1_differences_gt()
 
         # get text retrieval information for action stages
-        if self.args.eval_mode in (0, 1):
-            self.query_2_subactions()  # actually has query 2 and query 3
-        else:
-            raise
+        self.query_2_subactions()  # actually has query 2 and query 3
 
         # link the differences to stages
         self.query_4_linking()
