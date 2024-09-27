@@ -7,17 +7,19 @@ n_differences: data/n_differences.json
 verbose: 1
 
 logging: 
-  name: eval2_ballsports
+  name: eval2_surgery
   results_dir: viddiff_method/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: ${verbose}
 
 data:
-  split: ballsports
+  split: surgery
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  subset_mode: "0" # works with "3_per_action" for example
-  fps: 4
+  subset_mode: "0"
+  # fps: -1
+  fps: 2
+  # subset_mode: "0" # works with "3_per_action" for example
 
 # stage 1
 proposer: 

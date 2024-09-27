@@ -44,7 +44,6 @@ cache_lock = Lock()
 HITS = 0 
 MISSES = 0
 
-
 # cache_openai = redis.Redis(host="localhost", port=6379, db=0)
 # cache_openai.config_set("save", "60 1")
 
@@ -84,7 +83,7 @@ def call_gpt(
         cache key, so changing it will force the API to be called again
     """
     global HITS, MISSES
-    print(f"\rHits {HITS}, Misses {MISSES}", end="")
+    print(f"\rGPT cache. Hits: {HITS}. Misses: {MISSES}", end="")
     # response format
     if json_mode:
         response_format = {"type": "json_object"}
@@ -135,9 +134,11 @@ def call_gpt(
         if msg is not None and not overwrite_cache:
             if json_mode:
                 msg = json.loads(msg)
-            HITS += 1
+            with cache_lock:
+                HITS += 1
             return msg, None
-    MISSES += 1
+    with cache_lock:
+        MISSES += 1
 
     # not caching, so if imgs,then encode the image to the http payload
     if imgs:
@@ -291,7 +292,7 @@ if __name__ == "__main__":
 
     model = "gpt-4o-mini"
     print(model)
-    # msg, res = call_gpt(text0, model=model, cache=True, json_mode=False)
-    res = call_gpt_batch(text0, cache=False, json_mode=False)
+    # msg, res = call_gpt(text0, model=model, cache=False, json_mode=False)
+    res = call_gpt_batch([text0]*10, cache=False, json_mode=False)
     ipdb.set_trace()
     pass

@@ -11,7 +11,7 @@ logging:
   verbose: 1 
 
 data:
-  split: music
+  split: surgery
   debug: ${debug}
   eval_mode: ${eval_mode}  
   subset_mode: "0"

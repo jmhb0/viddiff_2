@@ -20,6 +20,9 @@ from apis import openai_api
 from proposer_types import Difference, Stage, Proposal, CustomJsonEncoder
 import eval_viddiff
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 class Proposer():
     """

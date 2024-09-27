@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # for fname in "gpt-4o_easy_8fps.yaml" "gpt-4o_ballsports_10fps.yaml" "gpt-4o_fitness_8fps.yaml" "gpt-4o_music_3fps.yaml" "gpt-4o_surgery_3fps.yaml"; do
-# for fname in "mode2-gpt-4o_ballsports_4fps.yaml" "mode2-gpt-4o_fitness_4fps.yaml" "mode2-gpt-4o_diving_4fps.yaml" "mode2-gpt-4o_music_2fps.yaml" ; do 
-for fname in "mode2-gpt-4o_ballsports_4fps.yaml" "eval2_fitness.yaml" ; do 
+for fname in "mode2-gpt-4o_easy_4fps.yaml" "mode2-gpt-4o_ballsports_4fps.yaml" "mode2-gpt-4o_fitness_4fps.yaml" "mode2-gpt-4o_diving_4fps.yaml" "mode2-gpt-4o_music_2fps.yaml" "mode2-gpt-4o_surgery_2fps.yaml" ; do 
+# for fname in "mode2-gpt-4o_ballsports_4fps.yaml" "mode2-gpt-4o_fitness_4fps.yaml" ; do 
     # Remove .yaml extension for the log file name
     log_base=${fname%.yaml}
     

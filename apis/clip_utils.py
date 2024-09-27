@@ -17,6 +17,9 @@ from apis.global_vars import CLIP_CACHE_FILE, CLIP_URL
 from cache.cache_utils import get_from_cache, save_to_cache
 from cache import cache_utils
 
+HITS = 0
+MISSES = 0
+
 if not os.path.exists(CLIP_CACHE_FILE):
     os.makedirs(CLIP_CACHE_FILE)
 
@@ -24,13 +27,18 @@ clip_cache = lmdb.open(CLIP_CACHE_FILE, map_size=int(1e11))
 
 
 def get_embeddings(inputs: List[str], model: str, modality: str, raise_on_clip_fail=True) -> np.ndarray:
+    global HITS, MISSES
+    print(f"\rCLIP server cache. Hits: {HITS}. Misses: {MISSES}", end="")
     input_to_embeddings = {}
     for inp in inputs:
         key = json.dumps([inp, model])
         cached_value = get_from_cache(key, clip_cache)
         if cached_value is not None:
             logging.debug(f"CLIP Cache Hit")
+            HITS += 1 
             input_to_embeddings[inp] = json.loads(cached_value)
+        else:
+            MISSES += 1
 
     uncached_inputs = [inp for inp in inputs if inp not in input_to_embeddings]
 
@@ -92,12 +100,15 @@ def get_embeddings_video(video: np.ndarray, model: str) -> np.ndarray:
 
 
 if __name__ == "__main__":
+
+    ipdb.set_trace()
+    embeddings = get_embeddings(["haha", "hello world"], "ViT-bigG-14", "text")
+    print(embeddings)
+
+    ipdb.set_trace()
     embeddings = get_embeddings(
         ["data/teaser.png"],
         "ViT-bigG-14",
         "image",
     )
-    print(embeddings)
-
-    embeddings = get_embeddings(["haha", "hello world"], "ViT-bigG-14", "text")
     print(embeddings)

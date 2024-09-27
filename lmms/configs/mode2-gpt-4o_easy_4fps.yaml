@@ -5,7 +5,7 @@ do_eval: 1
 eval_mode: 2
 
 logging: 
-  name: mode2-gpt-4o_easy_8fps
+  name: mode2-gpt-4o_easy_4fps
   results_dir: lmms/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: 1 
@@ -14,7 +14,7 @@ data:
   split: easy
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  subset_mode: "8_per_action"
+  subset_mode: "0"
 
 lmm:
   api: openai

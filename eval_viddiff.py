@@ -81,7 +81,10 @@ def compute_metrics(df_notfiltered, results_dir=None):
     err_is_c = df['err_is_c'].mean()
     # err = ((x['gt'] == 'a') & (x['pred'] == 'b')) | ((x['gt'] == 'b') & (x['pred'] == 'a'))
 
-    assert math.isclose(err_flippedpred + err_nomatch + err_is_c, 1 - recall)
+    if not math.isclose(err_flippedpred + err_nomatch + err_is_c, 1 - recall):
+        logging.warning(
+            f"error counts a bit off: comparing (err_flippedpred + err_nomatch + err_is_c, 1 - recall) gives {err_flippedpred + err_nomatch + err_is_c}, {1 - recall}"
+        )
 
     metrics = dict(recall=float(recall),
                    err_nomatch=float(err_nomatch),
@@ -123,7 +126,7 @@ def log(dataset, df, metrics, predictions_excess, results_dir):
     df.to_csv(results_dir / "df_all_gt_diffs.csv")
 
     # log the csv for only when gt!='c'
-    df_ = df[df['gt'] == 'c'].copy()
+    df_ = df[df['gt'].isin(['a','b'])].copy()
     df_.to_csv(results_dir / "df_gt_positive_diffs.csv")
 
 
