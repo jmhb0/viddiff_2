@@ -2,25 +2,23 @@ project: viddiff_0
 seed: 0
 debug: 0
 do_eval: 1 
-eval_mode: 2
+eval_mode: 0
 
 logging: 
-  name: mode2-gemini-pro_diving_6fps_1geminifps
+  name: gpt-4o_music_2fps
   results_dir: lmms/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: 1 
 
 data:
-  split: diving
+  split: music
   debug: ${debug}
   eval_mode: ${eval_mode}  
   subset_mode: "0"
 
 lmm:
-  api: gemini 
-  fps: 6
-  fps_gemini: 1
-  model: models/gemini-1.5-pro
-  # model: models/gemini-1.5-flash
-  video_representation: video
+  api: openai
+  fps: 1
+  model: gpt-4o-2024-05-13
+  video_representation: frames
   seed: ${seed}

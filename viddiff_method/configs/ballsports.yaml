@@ -17,10 +17,9 @@ data:
   split: ballsports
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  # subset_mode: "0" # works with "3_per_action" for example
-  subset_mode: "8_per_action" # works with "3_per_action" for example
+  subset_mode: "0" # works with "3_per_action" for example
   # fps: -1
-  fps: 10
+  fps: 5
   # subset_mode: "0" # works with "3_per_action" for example
 
 # stage 1

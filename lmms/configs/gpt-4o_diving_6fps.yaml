@@ -14,7 +14,7 @@ data:
   split: diving
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  subset_mode: "8_per_action"
+  subset_mode: "0"
 
 lmm:
   api: openai

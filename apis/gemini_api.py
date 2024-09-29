@@ -27,6 +27,9 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 cache_gemini = lmdb.open("cache/gemini", map_size=int(1e11))
 cache_lock = Lock()
 
+system_prompt_default = """\
+"""
+
 
 def select_random_items(input_list, N: int = 3):
     if len(input_list) < N:
@@ -195,7 +198,7 @@ def call_gemini(
     return msg, response
 
 
-def call_gemini_batch(texts, videos, seeds, **kwargs):
+def call_gemini_batch(texts, videos, seeds, debug=None, **kwargs):
     """ 
     no multithreading for now 
     """
@@ -206,6 +209,8 @@ def call_gemini_batch(texts, videos, seeds, **kwargs):
     # code for doing it in serial
     logging.info(f"Running Gemini NOT in parallel")
     for i in trange(n):
+        if debug:
+            print(debug[i])
         msg, res = call_gemini(texts[i], videos[i], seeds[i], **kwargs)
         msgs.append(msg)
         responses.append(res)
@@ -236,7 +241,7 @@ def call_gemini_batch(texts, videos, seeds, **kwargs):
 def compute_api_call_cost(
     prompt_tokens: int,
     completion_tokens: int,
-    model="models/gemini-1.5-pro",
+    model="models/gemini-1.5-pro"
 ):
     """
     Warning: prices need to be manually updated from
@@ -282,7 +287,7 @@ if __name__ == "__main__":
 
     msg, response = call_gemini(text=text0,
                                 model="models/gemini-1.5-flash",
-                                cache=True,
+                                cache=False,
                                 videos=videos,
                                 json_mode=False)
     ipdb.set_trace()

@@ -166,3 +166,8 @@ res = openai_api.call_gpt(prompt, json_mode=False, max_tokens=15000)
 y = res[0]
 with open(results_dir / "gpt_spit_reasons.txt", "w") as fp:
     fp.write(y)
+
+ipdb.set_trace()
+prompt="""\
+"""
+pass

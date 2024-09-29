@@ -13,12 +13,11 @@ import logging
 import hashlib
 
 
-
 def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
     """
     splits in ['ballsports', 'demo', 'easy', 'fitness', 'music', 'surgery']
     """
-    dataset = load_dataset("viddiff/viddiff_0", cache_dir=None)
+    dataset = load_dataset("viddiff/viddiff", cache_dir=None)
     dataset = dataset['test']
 
     def _filter_splits(example):

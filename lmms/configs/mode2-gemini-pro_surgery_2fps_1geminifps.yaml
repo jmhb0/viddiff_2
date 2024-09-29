@@ -14,11 +14,11 @@ data:
   split: surgery
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  subset_mode: "15_per_action"
+  subset_mode: "0"
 
 lmm:
   api: gemini 
-  fps: 6
+  fps: 2
   fps_gemini: 1
   model: models/gemini-1.5-pro
   # model: models/gemini-1.5-flash

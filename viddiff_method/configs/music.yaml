@@ -16,10 +16,10 @@ data:
   split: music
   debug: ${debug}
   eval_mode: ${eval_mode}  
-  # subset_mode: "0" # works with "3_per_action" for example
-  subset_mode: "6_per_action" # works with "3_per_action" for example
+  subset_mode: "0" # works with "3_per_action" for example
+  # subset_mode: "6_per_action" # works with "3_per_action" for example
   # fps: -1
-  fps: 4
+  fps: 2
   # subset_mode: "0" # works with "3_per_action" for example
 
 # stage 1

@@ -1,8 +1,10 @@
 #!/bin/bash
 
 # for fname in "gemini-pro_music_10fps_1geminifps.yaml" "gemini-pro_fitness_8fps_1geminifps.yaml" "gemini-pro_ballsports_10fps_1geminifps.yaml" "gemini-pro_surgery_10fps_1geminifps.yaml" ; do
-#for fname in "eval2_easy.yaml" "eval2_fitness.yaml"  "eval2_ballsports.yaml" "eval2_diving.yaml" "eval2_music.yaml" "eval2_surgery.yam" ; do
-for fname in  "eval2_diving.yaml" "eval2_music.yaml" "eval2_surgery.yaml" ; do
+# for fname in "eval2_fitness.yaml"  "eval2_ballsports.yaml" "eval2_diving.yaml" "eval2_music.yaml" "eval2_surgery.yaml" ; do
+# for fname in "eval2_surgery.yaml" ; do
+# for fname in "ballsports.yaml" "fitness.yaml" "diving.yaml" "music.yaml" "surgery.yaml" ; do
+for fname in  "diving.yaml" "music.yaml" "surgery.yaml" ; do
     # Remove .yaml extension for the log file name
     log_base=${fname%.yaml}
     

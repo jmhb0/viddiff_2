@@ -66,6 +66,7 @@ def call_gpt(
     # args for caching behaviour
     cache: bool = True,
     overwrite_cache: bool = False,
+    debug=None,
     num_retries:
     # if json_mode=True, and not json decodable, retry this many time
     int = 3):
@@ -139,6 +140,7 @@ def call_gpt(
             return msg, None
     with cache_lock:
         MISSES += 1
+        # print("Debug: ", debug)
 
     # not caching, so if imgs,then encode the image to the http payload
     if imgs:
@@ -193,6 +195,7 @@ def call_gpt_batch(texts,
                    seeds=None,
                    json_modes=None,
                    get_meta=True,
+                   debug=None,
                    **kwargs):
     """ 
     with multithreading
@@ -206,12 +209,14 @@ def call_gpt_batch(texts,
 
     # handle having a different seed per call
     all_kwargs = [kwargs.copy() for _ in range(n)]
-    if seeds is not None or json_modes is not None:
+    if seeds is not None or json_modes is not None or debug is not None:
         for i in range(n):
             if seeds is not None:
                 all_kwargs[i]['seed'] = seeds[i]
             if json_modes is not None:
                 all_kwargs[i]['json_mode'] = json_modes[i]
+            if debug is not None:
+                all_kwargs[i]['debug'] = debug[i]
 
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:

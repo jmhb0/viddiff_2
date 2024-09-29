@@ -31,15 +31,18 @@ def main(config, name):
                                        args.data.subset_mode)
     videos = lvd.load_all_videos(dataset, do_tqdm=True)
     n_differences = lvd.get_n_differences(dataset, args.lmm.n_differences)
+    dataset, videos = _filter_bad_vids(dataset, videos, args.lmm.api)
 
     # make prompts and call the lmm
     batch_prompts_text, batch_prompts_video = lu.make_text_prompts(
         dataset, videos, n_differences, args.eval_mode, args.lmm)
+    debug = dataset['sample_key']
     predictions = lu.run_lmm(batch_prompts_text,
                              batch_prompts_video,
                              args.lmm,
                              args.eval_mode,
                              n_differences,
+                             debug=debug,
                              verbose=True)
 
     # do eval
@@ -50,6 +53,31 @@ def main(config, name):
                                         seed=args.seed,
                                         results_dir=args.logging.results_dir)
     print(metrics)
+
+    
+    
+def _filter_bad_vids(dataset, videos, api):
+    bad_keys = []
+    if api == 'openai':
+        bad_keys += ["surgery_76","surgery_74","surgery_94"]
+        # , "surgery_113", "surgery_114", "surgery_115", "surgery_116", "surgery_117", "surgery_118"]
+        bad_keys += [f'surgery_{i}' for i in range(113,170)]
+    if api=="gemini":
+       bad_keys += ["surgery_115", "surgery_131", "surgery_138", "surgery_151", "surgery_165"]
+       bad_keys += ["ballsports_5", "ballsports_11","ballsports_14", "ballsports_16", "ballsports_18"] 
+
+    bad_idxs = [i for i, s in enumerate(dataset['sample_key']) if s in bad_keys]
+
+    dataset_filtered = dataset.filter(lambda _, idx: idx not in bad_idxs, with_indices=True)
+    
+    videos_filtered = [[],[]] 
+
+    videos_filtered[0] = [v for i, v in enumerate(videos[0]) if i not in bad_idxs]
+    videos_filtered[1] = [v for i, v in enumerate(videos[1]) if i not in bad_idxs]
+    assert len(dataset_filtered) == len(videos_filtered[0])
+    
+    return dataset_filtered, videos_filtered
+
 
 
 if __name__ == "__main__":

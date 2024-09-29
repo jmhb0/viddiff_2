@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for fname in "mode2-gemini-pro_easy_4fps_1geminifps.yaml" "mode2-gemini-pro_fitness_4fps_1geminifps.yaml" "mode2-gemini-pro_ballsports_5fps_1geminifps.yaml" "mode2-gemini-pro_diving_6fps_1geminifps.yaml" "mode2-gemini-pro_music_2fps_1geminifps.yaml" "mode2-gemini-pro_surgery_2fps_1geminifps.yaml"; do
+for fname in  "mode2-gemini-pro_fitness_4fps_1geminifps.yaml" "mode2-gemini-pro_ballsports_5fps_1geminifps.yaml" "mode2-gemini-pro_diving_6fps_1geminifps.yaml" "mode2-gemini-pro_music_2fps_1geminifps.yaml" "mode2-gemini-pro_surgery_2fps_1geminifps.yaml"; do
     # Remove .yaml extension for the log file name
     log_base=${fname%.yaml}
     

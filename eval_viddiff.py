@@ -168,11 +168,12 @@ def do_matching(dataset, predictions_unmatched, seed):
     differences_gt_all = []
 
     for row, pred_unmatched in zip(dataset, predictions_unmatched):
-        # first for the gt
+        # (this filters keys that aren't actually for a real difference.
         differences_gt = {
             k: v
             for k, v in row['differences_gt'].items() if v is not None
         }
+
         differences_gt_all.append(differences_gt)
         keys_keep = differences_gt.keys()
 
@@ -207,7 +208,7 @@ def do_matching(dataset, predictions_unmatched, seed):
         batch_prompts_text,
         model='gpt-4o-2024-08-06',
         # model='gpt-4o-mini',
-        # overwrite_cache=True,
+        overwrite_cache=True,
         seeds=seeds)
     cost = sum([b[1] for b in res])
     logging.info(f"Cost for eval difference description matching: ${cost:.4f}")

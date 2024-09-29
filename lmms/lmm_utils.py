@@ -174,6 +174,7 @@ def run_lmm(batch_prompts_text: list[str],
             args_lmm: BaseContainer,
             eval_mode: int,
             n_differences: list[int],
+            debug=None,
             verbose: bool = True):
     """ 
     Assumes that the `batch_prompts_video` was formatted in an appropriate way
@@ -200,6 +201,7 @@ def run_lmm(batch_prompts_text: list[str],
                                         batch_prompts_video,
                                         seeds=seeds,
                                         model=args_lmm.model,
+                                        debug=debug,
                                         json_mode=json_mode)
         cost = sum([b[1] for b in res])
         logging.info(f"Cost for lmm differences generation: ${cost:.4f}")

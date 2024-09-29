@@ -64,7 +64,6 @@ def get_text_embeddings(texts: List[str]) -> List[List[float]]:
 @app.route("/", methods=["POST"])
 def interact_with_clip():
     # logging.info(request.form)
-    ipdb.set_trace()
     if "image" in request.form:
         images = json.loads(request.form["image"])
         # logging.info(images)

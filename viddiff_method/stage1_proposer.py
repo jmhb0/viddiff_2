@@ -132,8 +132,8 @@ class Proposer():
         # enforce max n_differences
         for res, n_diff in zip(responses, self.n_differences):
             if len(res) > n_diff:
-                logging.warning(f"\nA proposal had [{len(res)}] differences " \
-                f"but max allowed is {n_diff}")
+                # logging.warning(f"\nA proposal had [{len(res)}] differences " \
+                # f"but max allowed is {n_diff}")
                 res = dict(list(res.items())[:n_diff])
 
         # log results to object and to file
@@ -285,9 +285,9 @@ class Proposer():
             # Issue 1: a stage name in the link keys is hallucinated
             hallucinated_stages_in_links = set(links.keys()) - set(stage_names)
             if len(hallucinated_stages_in_links) > 0:
-                logging.warning(
-                    f"\nllm response has bad stage keys: {hallucinated_stages_in_links}\nReal stage links real: {stage_names}"
-                )
+                # logging.warning(
+                #     f"\nllm response has bad stage keys: {hallucinated_stages_in_links}\nReal stage links real: {stage_names}"
+                # )
                 for h_stage in hallucinated_stages_in_links:
 
                     # if it's very close in edit distance to another stage, then just add it to that stage
@@ -329,8 +329,8 @@ class Proposer():
             linked_differences_names = set(sum(links.values(), []))
             missing_diffs = difference_names - linked_differences_names
             if len(missing_diffs) > 0:
-                logging.warning(f"\nMissing some differences in the linking. \nDifferences were:\n{difference_names}\nLinked differences were:\n{linked_differences_names}\nMissing:\n{missing_diffs}"\
-                    f"\nAssigning to the middle stage in sample {sample_key} action {sample['action_name']}")
+                # logging.warning(f"\nMissing some differences in the linking. \nDifferences were:\n{difference_names}\nLinked differences were:\n{linked_differences_names}\nMissing:\n{missing_diffs}"\
+                #     f"\nAssigning to the middle stage in sample {sample_key} action {sample['action_name']}")
                 n_stages = len(stages['stages'])
                 for diff in missing_diffs:
                     stages['stages'][n_stages // 2]['differences'].append(diff)

@@ -29,7 +29,7 @@ def download_and_extract_videos(dataset_name, output_dir, split):
     print(f"Videos extracted to {output_dir}")
 
 # Usage
-dataset_name = "viddiff/viddiff_0"
+dataset_name = "viddiff/viddiff"
 output_dir = "."
 splits = ("surgery",) # "fitness","demo", "easy")
 for split in splits: 
