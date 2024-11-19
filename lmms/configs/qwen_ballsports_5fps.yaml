@@ -1,11 +1,11 @@
 project: viddiff_0
 seed: 0
 debug: 0
-do_eval: 1 
-eval_mode: 2
+do_eval: 1
+eval_mode: 0
 
 logging: 
-  name: mode2-gemini-pro_ballsports_5fps_1geminifps
+  name: qwen_ballsports_5fps
   results_dir: lmms/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: 1 
@@ -17,10 +17,8 @@ data:
   subset_mode: "0"
 
 lmm:
-  api: gemini 
+  api: qwen
   fps: 5
-  fps_gemini: 1
-  model: models/gemini-1.5-pro
-  # model: models/gemini-1.5-flash
+  model: "Qwen/Qwen2-VL-7B-Instruct"
   video_representation: video
   seed: ${seed}

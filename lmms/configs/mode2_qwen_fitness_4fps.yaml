@@ -5,22 +5,20 @@ do_eval: 1
 eval_mode: 2
 
 logging: 
-  name: mode2-gemini-pro_ballsports_5fps_1geminifps
+  name: mode2_qwen_fitness_4fps
   results_dir: lmms/results/${logging.name}/seed_${seed}
   overwrite_ok: True
   verbose: 1 
 
 data:
-  split: ballsports
+  split: fitness 
   debug: ${debug}
   eval_mode: ${eval_mode}  
   subset_mode: "0"
 
 lmm:
-  api: gemini 
-  fps: 5
-  fps_gemini: 1
-  model: models/gemini-1.5-pro
-  # model: models/gemini-1.5-flash
+  api: qwen
+  fps: 4
+  model: "Qwen/Qwen2-VL-7B-Instruct"
   video_representation: video
   seed: ${seed}

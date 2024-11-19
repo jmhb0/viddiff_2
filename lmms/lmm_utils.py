@@ -64,7 +64,8 @@ def make_text_prompts(dataset: Dataset, videos: tuple, n_differences: list,
             eval_mode,
             args_lmm,
             n_differences[i],
-            differences_annotated=differences_annotated)
+            differences_annotated=differences_annotated, 
+            model=args_lmm.model)
         batch_prompts_text.append(prompt_text)
         patch_prompt_videos.append(prompt_video)
 
@@ -77,7 +78,8 @@ def make_prompt(action_description: str,
                 eval_mode: int,
                 args_lmm: BaseContainer,
                 n_difference: int = None,
-                differences_annotated: dict = None):
+                differences_annotated: dict = None,
+                model: str = None):
     """
     create the text and video prompts 
     The possible representations are: {'frames','video', 'first_frame'}
@@ -95,15 +97,27 @@ def make_prompt(action_description: str,
         prompt_text = prompt_text.replace(
             "{differences_annotated}",
             json.dumps(differences_annotated, indent=2))
-        target = {
-            k: {
-                'description': v,
-                'prediction': "a|b"
-            }
-            for k, v in differences_annotated.items()
-        }
-        prompt_text = prompt_text.replace("{target_out}", json.dumps(target, indent=2))
-        
+        if 'qwen' not in model.lower():
+            target = {
+                k: {
+                    'description': v,
+                    'prediction': "a|b"
+                }
+                for k, v in differences_annotated.items()
+            }   
+        # deal with this exception
+        else:
+            target = {
+                k: {
+                    'description': v,
+                    'prediction': "..."
+                }
+                for k, v in differences_annotated.items()
+            }   
+
+        prompt_text = prompt_text.replace("{target_out}",
+                                          json.dumps(target, indent=2))
+
     else:
         raise ValueError()
 
@@ -215,12 +229,31 @@ def run_lmm(batch_prompts_text: list[str],
                                            batch_prompts_video,
                                            seeds=seeds,
                                            model=args_lmm.model,
+                                           debug=debug,
                                            fps=args_lmm.fps_gemini)
         if eval_mode != 1:
             predictions = _reformat_malformed_json_prediction(
                 [r for r in res[0]])
         else:
             predictions = [r for r in res[0]]
+
+    elif args_lmm.api == "qwen":
+        from apis import qwen_api
+
+        assert args_lmm.video_representation == "video"
+        seeds = [args_lmm.seed] * len(batch_prompts_text)
+        if verbose:
+            logging.info(
+                f"Running model {args_lmm.model} on {len(batch_prompts_text)} prompts"
+            )
+
+        msgs, responses = qwen_api.call_qwen_batch(batch_prompts_text,
+                                       batch_prompts_video,
+                                       seeds=seeds,
+                                       model=args_lmm.model,
+                                       debug=debug,
+                                       json_mode=json_mode)
+        predictions = _reformat_malformed_json_prediction(msgs)
 
     else:
         raise ValueError(

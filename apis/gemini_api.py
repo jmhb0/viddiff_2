@@ -19,6 +19,7 @@ import google.generativeai as genai
 from tqdm import trange
 import logging
 import concurrent.futures
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 sys.path.insert(0, ".")
 from cache import cache_utils
@@ -27,8 +28,6 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 cache_gemini = lmdb.open("cache/gemini", map_size=int(1e11))
 cache_lock = Lock()
 
-system_prompt_default = """\
-"""
 
 
 def select_random_items(input_list, N: int = 3):
@@ -177,7 +176,10 @@ def call_gemini(
 
     gemini_model = genai.GenerativeModel(model_name=model)
     response = gemini_model.generate_content(content_call,
-                                      request_options={"timeout": 600})
+                                      request_options={"timeout": 600},
+                                      safety_settings={
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    })
 
     prompt_tokens = response.usage_metadata.prompt_token_count
     completion_tokens = response.usage_metadata.candidates_token_count
@@ -209,32 +211,12 @@ def call_gemini_batch(texts, videos, seeds, debug=None, **kwargs):
     # code for doing it in serial
     logging.info(f"Running Gemini NOT in parallel")
     for i in trange(n):
-        if debug:
-            print(debug[i])
+        # if debug:
+        #     print(debug[i])
         msg, res = call_gemini(texts[i], videos[i], seeds[i], **kwargs)
         msgs.append(msg)
         responses.append(res)
-
-    # all_kwargs = [kwargs.copy() for _ in range(n)]
-    # if seeds is not None:
-    #     for i in range(n):
-    #         all_kwargs[i]['seed'] = seeds[i]
-
-    # with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
-    #     futures = []
-
-    #     for text, _videos, _kwargs in zip(texts, videos, all_kwargs):
-    #         future = executor.submit(call_gemini, text, _videos, **_kwargs)
-    #         futures.append(future)
-
-    #     # run
-    #     # results = [list(future.result()) for future in futures]
-    #     results = []
-    #     for future in tqdm(concurrent.futures.as_completed(futures),
-    #                        total=len(futures),
-    #                        desc="Processing"):
-    #         results.append(list(future.result()))
-
+        
     return msgs, responses
 
 

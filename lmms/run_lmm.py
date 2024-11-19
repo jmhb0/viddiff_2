@@ -1,3 +1,4 @@
+import torch
 import ipdb
 import click
 import json
@@ -36,13 +37,13 @@ def main(config, name):
     # make prompts and call the lmm
     batch_prompts_text, batch_prompts_video = lu.make_text_prompts(
         dataset, videos, n_differences, args.eval_mode, args.lmm)
-    debug = dataset['sample_key']
+    # debug = dataset['sample_key']
     predictions = lu.run_lmm(batch_prompts_text,
                              batch_prompts_video,
                              args.lmm,
                              args.eval_mode,
                              n_differences,
-                             debug=debug,
+                             # debug=debug,
                              verbose=True)
 
     # do eval
@@ -59,12 +60,15 @@ def main(config, name):
 def _filter_bad_vids(dataset, videos, api):
     bad_keys = []
     if api == 'openai':
-        bad_keys += ["surgery_76","surgery_74","surgery_94"]
+        pass
+        # bad_keys += ["surgery_76","surgery_74","surgery_94"]
         # , "surgery_113", "surgery_114", "surgery_115", "surgery_116", "surgery_117", "surgery_118"]
-        bad_keys += [f'surgery_{i}' for i in range(113,170)]
-    if api=="gemini":
-       bad_keys += ["surgery_115", "surgery_131", "surgery_138", "surgery_151", "surgery_165"]
-       bad_keys += ["ballsports_5", "ballsports_11","ballsports_14", "ballsports_16", "ballsports_18"] 
+        # bad_keys += [f'surgery_{i}' for i in range(113,170)]
+    elif api=="gemini":
+        pass
+       # bad_keys += ["surgery_115", "surgery_131", "surgery_138", "surgery_151", "surgery_165"]
+       # bad_keys += ["ballsports_5", "ballsports_11","ballsports_14", "ballsports_16", "ballsports_18"] 
+       # bad_keys += ["ballsports_0", "ballsports_1","ballsports_2", "ballsports_3", "ballsports_4"] 
 
     bad_idxs = [i for i, s in enumerate(dataset['sample_key']) if s in bad_keys]
 

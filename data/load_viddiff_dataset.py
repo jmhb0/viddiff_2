@@ -17,7 +17,7 @@ def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
     """
     splits in ['ballsports', 'demo', 'easy', 'fitness', 'music', 'surgery']
     """
-    dataset = load_dataset("viddiff/viddiff", cache_dir=None)
+    dataset = load_dataset("viddiff/VidDiffBench", cache_dir=None)
     dataset = dataset['test']
 
     def _filter_splits(example):
@@ -36,6 +36,18 @@ def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
     # dataset = dataset.map(_clean_annotations)
     dataset = apply_subset_mode(dataset, subset_mode)
 
+    dataset = _get_difficulty_splits(dataset)
+
+    return dataset
+
+def _get_difficulty_splits(dataset):
+    with open("data/lookup_action_to_split.json", "r") as fp:
+        lookup_action_to_split = json.load(fp)
+    def add_split_difficulty(example):
+        example['split_difficulty'] = lookup_action_to_split[example['action']]
+        return example
+
+    dataset = dataset.map(add_split_difficulty)
     return dataset
 
 
@@ -300,8 +312,44 @@ def get_n_differences(dataset, config_n_differences: int | str | Path):
 
     return n_differences
 
+def dataset_metrics(dataset):
+    import pandas as pd
+    df = pd.DataFrame(dataset)
+    print("Number of actions ")
+    print(df.groupby(['split'])['action'].nunique())
+    print("Total actions", df['action'].nunique())
+
+
+    print("Samples by category")
+    print(df.groupby(["split"])['split'].count())
+    print("Total ", len(df))
+    print()
+
+    diffs = []
+    for row in dataset:
+        diff = {k:v for k,v in  row['differences_gt'].items() if v is not None }
+        diffs.append(diff)
+    cnts = [len(d) for d in diffs]
+    df['variation_cnts'] = cnts
+    print("Variation counts by category")
+    print(df.groupby(['split'])['variation_cnts'].sum())
+    print("total ", df['variation_cnts'].sum())
+
+
+
+    ipdb.set_trace()
+
+    pass
+
+    print() 
 
 if __name__ == "__main__":
-    # dataset = load_viddiff_dataset(splits=['surgery','ballsports'])
-    dataset = load_viddiff_dataset(splits=['demo'])
+    # these are the 3 data loading commands
+    splits = ['ballsports', 'fitness', 'diving', 'music', 'surgery']
+    dataset = load_viddiff_dataset(splits=splits)
+    metrics = dataset_metrics(dataset)
+
     videos = load_all_videos(dataset)
+    n_differences = lvd.get_n_differences(dataset, "data/n_differences.json") 
+
+
