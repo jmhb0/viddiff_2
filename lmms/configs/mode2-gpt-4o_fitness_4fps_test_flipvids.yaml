@@ -1,0 +1,26 @@
+project: viddiff_0
+seed: 1
+debug: 0
+do_eval: 1 
+eval_mode: 2
+test_samevideo: 0
+test_flipvids: 1
+
+logging: 
+  name: mode2-gpt-4o_fitness_4fps_test_flipvids
+  results_dir: lmms/results/${logging.name}/seed_${seed}
+  overwrite_ok: True
+  verbose: 1 
+
+data:
+  split: fitness
+  debug: ${debug}
+  eval_mode: ${eval_mode}  
+  subset_mode: "0"
+
+lmm:
+  api: openai
+  fps: 4
+  model: gpt-4o-2024-05-13
+  video_representation: frames
+  seed: ${seed}

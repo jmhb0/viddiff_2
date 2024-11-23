@@ -8,6 +8,9 @@ import sys
 import json
 import pandas as pd
 import re
+import torch
+import copy
+import lmdb 
 
 sys.path.insert(0, ".")
 
@@ -64,7 +67,7 @@ def make_text_prompts(dataset: Dataset, videos: tuple, n_differences: list,
             eval_mode,
             args_lmm,
             n_differences[i],
-            differences_annotated=differences_annotated, 
+            differences_annotated=differences_annotated,
             model=args_lmm.model)
         batch_prompts_text.append(prompt_text)
         patch_prompt_videos.append(prompt_video)
@@ -104,8 +107,8 @@ def make_prompt(action_description: str,
                     'prediction': "a|b"
                 }
                 for k, v in differences_annotated.items()
-            }   
-        # deal with this exception
+            }
+        # deal with this exception. Qwen didn't follow this instruction well.
         else:
             target = {
                 k: {
@@ -113,7 +116,7 @@ def make_prompt(action_description: str,
                     'prediction': "..."
                 }
                 for k, v in differences_annotated.items()
-            }   
+            }
 
         prompt_text = prompt_text.replace("{target_out}",
                                           json.dumps(target, indent=2))
@@ -161,24 +164,59 @@ def make_prompt(action_description: str,
         total_frames = nframes[0] + nframes[1]
         if total_frames > args_lmm.max_imgs:
             raise ValueError(f"Total frames [{total_frames}] is more than the "\
-                "max frames set in the config lmms.max_imgs. Change the " \
-                "max_frames or lower the config value for lmms.fps")
+             "max frames set in the config lmms.max_imgs. Change the " \
+             "max_frames or lower the config value for lmms.fps")
+
+        prompt_text = prompt_text.replace("{video_representation_description}",
+                                          video_rep_description)
 
     elif args_lmm.video_representation == "video":
         video_rep_description = lp.video_rep_description_2_videos
+        prompt_text = prompt_text.replace("{video_representation_description}",
+                                          video_rep_description)
+
         prompt_videos = [video0['video'], video1['video']]
 
     elif args_lmm.video_representation == "first_frame":
         video_rep_description = lp.video_rep_description_first_frame
+        prompt_text = prompt_text.replace("{video_representation_description}",
+                                          video_rep_description)
+
         prompt_videos = [video0['video'][0], video1['video'][0]]
+
+    elif args_lmm.video_representation == "llavavideo":
+        from llava.conversation import conv_templates, SeparatorStyle
+        from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, IGNORE_INDEX
+
+        fps0, fps1 = video0['fps'], video1['fps']
+        nframes0, nframes1 = len(video0['video']), len(video1['video'])
+        time0, time1 = nframes0 / fps0, nframes1 / fps1
+        frame_time0_ = np.linspace(0, time0, nframes0)
+        frame_time0 = ",".join([f"{i:.2f}s" for i in frame_time0_])
+        frame_time1_ = np.linspace(0, time1,
+                                   nframes1) + time0  # add time from first vid
+        frame_time1 = ",".join([f"{i:.2f}s" for i in frame_time1_])
+
+        # combine the 2 vids into a single vid
+        video0, video1 = match_video_dimensions(video0['video'],
+                                                video1['video'])
+        prompt_videos = [torch.from_numpy(np.vstack([video0, video1]))]
+
+        time_instruciton = f"The video is two different videos concatenated together.\n"
+        time_instruciton += f"The first {nframes0} frames are video a, lasts for {time0:.2f} seconds, and these frames are located at {frame_time0}."
+        time_instruciton += f"The second {nframes1} frames are video b, lasts for {time1:.2f} seconds, and these frames are located at {frame_time1}."
+        text = DEFAULT_IMAGE_TOKEN + f"\n{time_instruciton}\n{prompt_text}"
+
+        conv = copy.deepcopy(conv_templates["qwen_1_5"])
+        conv.append_message(conv.roles[0], text)
+        conv.append_message(conv.roles[1], None)
+        prompt_question = conv.get_prompt()
+        prompt_text = prompt_question
 
     else:
         raise ValueError(
             f"Config for lmm.video_representation [{video_representation}] not recognised"
         )
-
-    prompt_text = prompt_text.replace("{video_representation_description}",
-                                      video_rep_description)
 
     return prompt_text, prompt_videos
 
@@ -203,7 +241,7 @@ def run_lmm(batch_prompts_text: list[str],
         assert n_differences is None
         json_mode = False
 
-    if args_lmm.api == "openai":
+    if args_lmm.api == "openai" and 'gpt' in args_lmm.model:
         from apis import openai_api
         assert args_lmm.video_representation in ("frames", "first_frame")
         seeds = [args_lmm.seed] * len(batch_prompts_text)
@@ -220,6 +258,30 @@ def run_lmm(batch_prompts_text: list[str],
         cost = sum([b[1] for b in res])
         logging.info(f"Cost for lmm differences generation: ${cost:.4f}")
         predictions = [b[0] for b in res]
+
+    elif args_lmm.api == "openai" and 'claude' in args_lmm.model:
+        from apis import openai_api
+        assert args_lmm.video_representation in ("frames", "first_frame")
+        seeds = [args_lmm.seed] * len(batch_prompts_text)
+        if verbose:
+            logging.info(
+                f"Running model {args_lmm.model} on {len(batch_prompts_text)} prompts"
+            )
+        json_mode = False  # bc of the thing
+        res = openai_api.call_gpt_batch(batch_prompts_text,
+                                        batch_prompts_video,
+                                        seeds=seeds,
+                                        model=args_lmm.model,
+                                        debug=debug,
+                                        json_mode=json_mode)
+        cost = sum([b[1] for b in res])
+        logging.info(f"Cost for lmm differences generation: ${cost:.4f}")
+        predictions = [b[0] for b in res]
+
+        if eval_mode != 1:
+            predictions = _reformat_malformed_json_prediction(predictions)
+        else:
+            predictions = [r for r in res[0]]
 
     elif args_lmm.api == "gemini":
 
@@ -246,14 +308,33 @@ def run_lmm(batch_prompts_text: list[str],
             logging.info(
                 f"Running model {args_lmm.model} on {len(batch_prompts_text)} prompts"
             )
-
         msgs, responses = qwen_api.call_qwen_batch(batch_prompts_text,
-                                       batch_prompts_video,
-                                       seeds=seeds,
-                                       model=args_lmm.model,
-                                       debug=debug,
-                                       json_mode=json_mode)
+                                                   batch_prompts_video,
+                                                   seeds=seeds,
+                                                   model=args_lmm.model,
+                                                   debug=debug,
+                                                   json_mode=json_mode)
         predictions = _reformat_malformed_json_prediction(msgs)
+
+    elif args_lmm.api == "llavavideo":
+        from apis import llavavideo_api
+        assert args_lmm.video_representation == "llavavideo"
+
+        seeds = [args_lmm.seed] * len(batch_prompts_text)
+        if verbose:
+            logging.info(
+                f"Running model {args_lmm.model} on {len(batch_prompts_text)} prompts"
+            )
+        msgs, responses = llavavideo_api.call_llavavideo_batch(
+            batch_prompts_text,
+            batch_prompts_video,
+            seeds=seeds,
+            model=args_lmm.model,
+            debug=debug)
+        try:
+            predictions = [json.loads(m) for m in msgs]
+        except json.JSONDecodeError as e:
+            predictions = _reformat_malformed_json_prediction(msgs, cache=True)
 
     else:
         raise ValueError(
@@ -291,7 +372,10 @@ def _remove_trailing_commas_json(json_string):
     return json_string
 
 
-def _reformat_malformed_json_prediction(malformed_outputs, skip=False):
+def _reformat_malformed_json_prediction(malformed_outputs,
+                                        skip=False,
+                                        cache=True):
+    cache_reformat = lmdb.open("cache/cache_reformat", map_size=int(1e12))
 
     # run the skip branch if we have high confidence the json will be correct
     if skip:
@@ -306,7 +390,12 @@ def _reformat_malformed_json_prediction(malformed_outputs, skip=False):
         for g in malformed_outputs
     ]
     seeds = [0] * len(prompts)
-    res = openai_api.call_gpt_batch(prompts, seeds=seeds, model='gpt-4o-mini')
+    res = openai_api.call_gpt_batch(prompts,
+                                    seeds=seeds,
+                                    model='gpt-4o-mini',
+                                    max_tokens=4000,
+                                    cache_dir=cache_reformat,
+                                    cache=cache)
     predictions = [r[0] for r in res]
 
     return predictions
@@ -322,7 +411,7 @@ def _truncate_too_many_preds(predictions, n_differences: list[int],
 
             if do_warning:
                 logging.warning(f"Max {n_differences[i]} differences allowed, but "\
-                    f"prediction {i} has {len(pred)}. Doing naive truncation.")
+                 f"prediction {i} has {len(pred)}. Doing naive truncation.")
 
             predictions[i] = dict(list(pred.items())[:n_differences[i]])
 
@@ -332,3 +421,18 @@ def _truncate_too_many_preds(predictions, n_differences: list[int],
     ])
 
     return predictions
+
+
+def match_video_dimensions(video0: np.ndarray, video1: np.ndarray):
+    import torch
+    import torchvision.transforms as T
+    T0, H0, W0, C0 = video0.shape
+    T1, H1, W1, C1 = video1.shape
+    if H0 != H1 or W0 != W1:
+        transform = T.Compose([T.Resize((H0, W0))])
+        video1 = torch.stack([
+            transform(torch.from_numpy(frame).permute(2, 0, 1))
+            for frame in video1
+        ]).permute(0, 2, 3, 1).numpy()
+
+    return video0, video1

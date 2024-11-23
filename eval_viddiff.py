@@ -9,8 +9,11 @@ from datasets import Dataset
 from pathlib import Path
 import math
 from apis import openai_api
+from pydantic import BaseModel
+import lmdb
 
-
+TEST_SEED = 0
+cache_match = lmdb.open("cache/cache_match", map_size=int(1e12))
 def eval_viddiff(dataset: Dataset,
                  predictions_unmatched: list[dict[str, dict]],
                  eval_mode: int,
@@ -126,7 +129,7 @@ def log(dataset, df, metrics, predictions_excess, results_dir):
     df.to_csv(results_dir / "df_all_gt_diffs.csv")
 
     # log the csv for only when gt!='c'
-    df_ = df[df['gt'].isin(['a','b'])].copy()
+    df_ = df[df['gt'].isin(['a', 'b'])].copy()
     df_.to_csv(results_dir / "df_gt_positive_diffs.csv")
 
 
@@ -204,16 +207,30 @@ def do_matching(dataset, predictions_unmatched, seed):
 
     seeds = [seed for _ in range(len(batch_prompts_text))]
     logging.info("GPT call: matching")
+    
+    seeds = [seed+TEST_SEED for _ in range(len(batch_prompts_text))]
+    # structured output
+    class Match(BaseModel):
+        key_dict0: str
+        key_dict1: str
+    class MatchingResponser(BaseModel):
+        matches: list[Match]
     res = openai_api.call_gpt_batch(
         batch_prompts_text,
         model='gpt-4o-2024-08-06',
-        # model='gpt-4o-mini',
-        overwrite_cache=True,
+        response_format=MatchingResponser,
+        json_mode=False,
+        cache_dir=cache_match,
+        # overwrite_cache=False,
         seeds=seeds)
     cost = sum([b[1] for b in res])
     logging.info(f"Cost for eval difference description matching: ${cost:.4f}")
-    matches = [b[0] for b in res]
-
+    matches_ = [b[0] for b in res]
+    matches = []
+    for m_ in matches_:
+        m = { el['key_dict0'] : el['key_dict1'] for el in m_['matches']}
+        matches.append(m)
+    
     ## recover predictions
     predictions = []  # matched predictions
     for i, (row, differences_gt, pred_unmatched, match) in enumerate(
@@ -323,11 +340,13 @@ def test_reverse_statements(predictions, seed, batch_size):
 
     # run the prompts
     seeds = [seed for _ in range(len(batch_prompts_text))]
+    seeds = [seed+TEST_SEED for _ in range(len(batch_prompts_text))]
     logging.info("GPT call: checking 'is_opposite'")
     res = openai_api.call_gpt_batch(
         batch_prompts_text,
         seeds=seeds,
         # overwrite_cache=True,
+        cache_dir=cache_match,
         model="gpt-4o-mini")
     cost = sum([r[1] for r in res])
     logging.info(f"Cost for eval on 'is_opposite' statement: ${cost:.4f}")

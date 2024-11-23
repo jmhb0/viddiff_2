@@ -13,17 +13,21 @@ import logging
 import hashlib
 
 
-def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
+def load_viddiff_dataset(splits=["fitness"], subset_mode="0"):
     """
-    splits in ['ballsports', 'demo', 'easy', 'fitness', 'music', 'surgery']
+    splits in ['ballsports', 'diving', 'fitness', 'music', 'surgery']
     """
     dataset = load_dataset("viddiff/VidDiffBench", cache_dir=None)
     dataset = dataset['test']
+    valid_splits = set(dataset['split'])
 
     def _filter_splits(example):
         return example["split"] in splits
 
     dataset = dataset.filter(_filter_splits)
+    if len(dataset) == 0:
+        raise ValueError(
+            f"Dataset empty for splits {splits}. Valid splits {valid_splits}")
 
     def _map_elements_to_json(example):
         example["videos"] = json.loads(example["videos"])
@@ -40,9 +44,11 @@ def load_viddiff_dataset(splits=["easy"], subset_mode="0"):
 
     return dataset
 
+
 def _get_difficulty_splits(dataset):
     with open("data/lookup_action_to_split.json", "r") as fp:
         lookup_action_to_split = json.load(fp)
+
     def add_split_difficulty(example):
         example['split_difficulty'] = lookup_action_to_split[example['action']]
         return example
@@ -51,7 +57,12 @@ def _get_difficulty_splits(dataset):
     return dataset
 
 
-def load_all_videos(dataset, cache=True, do_tqdm=True):
+def load_all_videos(dataset,
+                    cache=True,
+                    overwrite_cache=False,
+                    test_samevideo=0,
+                    test_flipvids=0,
+                    do_tqdm=True):
     """ 
     Return a 2-element tuple. Each element is a list of length len(datset). 
     First list is video A for each datapoint as a dict with elements 
@@ -70,10 +81,21 @@ def load_all_videos(dataset, cache=True, do_tqdm=True):
 
     # load each video
     for row in it:
-        videos = get_video_data(row['videos'], cache=cache)
+        videos = get_video_data(row['videos'],
+                                cache=cache,
+                                overwrite_cache=overwrite_cache)
 
-        all_videos[0].append(videos[0])
-        all_videos[1].append(videos[1])
+        video0, video1 = videos[0], videos[1]
+
+        if test_flipvids:
+            video0, video1 = video1, video0
+
+        if not test_samevideo:
+            all_videos[0].append(video0)
+            all_videos[1].append(video1)
+        else:
+            all_videos[0].append(video1)
+            all_videos[1].append(video1)
 
     return all_videos
 
@@ -98,7 +120,7 @@ def _clean_annotations(example):
     return example
 
 
-def get_video_data(videos: dict, cache=True):
+def get_video_data(videos: dict, cache=True, overwrite_cache=False):
     """
     Pass in the videos dictionary from the dataset, like dataset[idx]['videos'].
     Load the 2 videos represented as numpy arrays. 
@@ -123,7 +145,8 @@ def get_video_data(videos: dict, cache=True):
             hash_key = get_hash_key(path + str(frames_trim))
             memmap_filename = dir_cache / f"memmap_{hash_key}.npy"
 
-            if os.path.exists(memmap_filename):
+            # if not in the cache, and not overwriting, then get OG video
+            if os.path.exists(memmap_filename) and not overwrite_cache:
                 video_info = np.load(f"{memmap_filename}.info.npy",
                                      allow_pickle=True).item()
                 video = np.memmap(memmap_filename,
@@ -312,13 +335,13 @@ def get_n_differences(dataset, config_n_differences: int | str | Path):
 
     return n_differences
 
+
 def dataset_metrics(dataset):
     import pandas as pd
     df = pd.DataFrame(dataset)
     print("Number of actions ")
     print(df.groupby(['split'])['action'].nunique())
     print("Total actions", df['action'].nunique())
-
 
     print("Samples by category")
     print(df.groupby(["split"])['split'].count())
@@ -327,7 +350,10 @@ def dataset_metrics(dataset):
 
     diffs = []
     for row in dataset:
-        diff = {k:v for k,v in  row['differences_gt'].items() if v is not None }
+        diff = {
+            k: v
+            for k, v in row['differences_gt'].items() if v is not None
+        }
         diffs.append(diff)
     cnts = [len(d) for d in diffs]
     df['variation_cnts'] = cnts
@@ -335,13 +361,12 @@ def dataset_metrics(dataset):
     print(df.groupby(['split'])['variation_cnts'].sum())
     print("total ", df['variation_cnts'].sum())
 
-
-
     ipdb.set_trace()
 
     pass
 
-    print() 
+    print()
+
 
 if __name__ == "__main__":
     # these are the 3 data loading commands
@@ -350,6 +375,4 @@ if __name__ == "__main__":
     metrics = dataset_metrics(dataset)
 
     videos = load_all_videos(dataset)
-    n_differences = lvd.get_n_differences(dataset, "data/n_differences.json") 
-
-
+    n_differences = lvd.get_n_differences(dataset, "data/n_differences.json")

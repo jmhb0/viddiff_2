@@ -223,6 +223,10 @@ def call_qwen2V(
 
     messages = [{"role": "user", "content": content}]
 
+    print("*"*80)
+    print(content)
+
+
     # Preparation for inference
     text = model_dict["processor"].apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True)

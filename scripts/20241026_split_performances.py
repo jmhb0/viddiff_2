@@ -11,12 +11,14 @@ from data import load_viddiff_dataset as lvd
 results_dir = Path(__file__).parent / "results" / Path(__file__).stem
 results_dir.mkdir(exist_ok=True)
 
-mode = 2
+mode = 0
 print(f"Running mode ", mode)
 # 'compare' = 'gpt|gemini'
 # compare = 'gemini'
 # compare = 'gpt'
-compare = 'qwen'
+# compare = 'qwen'
+# compare = "claude"
+compare = "llavavideo"
 print()
 print("comparing moddel ", compare)
 
@@ -26,17 +28,17 @@ dataset = lvd.load_viddiff_dataset(splits)
 
 ### gpt-4o results
 if compare == 'gpt':
-    if mode == 2:
-        names = [
-            "mode2-gpt-4o_ballsports_4fps.yaml",
-            "mode2-gpt-4o_fitness_4fps.yaml", "mode2-gpt-4o_diving_4fps.yaml",
-            "mode2-gpt-4o_music_2fps.yaml", "mode2-gpt-4o_surgery_2fps.yaml"
-        ]
-    elif mode == 0:
+    if mode == 0:
         names = [
             "gpt-4o_ballsports_5fps.yaml", "gpt-4o_fitness_4fps.yaml",
             "gpt-4o_diving_6fps.yaml", "gpt-4o_music_2fps.yaml",
             "gpt-4o_surgery_2fps.yaml"
+        ]
+    elif mode == 2:
+        names = [
+            "mode2-gpt-4o_ballsports_4fps.yaml",
+            "mode2-gpt-4o_fitness_4fps.yaml", "mode2-gpt-4o_diving_4fps.yaml",
+            "mode2-gpt-4o_music_2fps.yaml", "mode2-gpt-4o_surgery_2fps.yaml"
         ]
 elif compare == "gemini":
     if mode == 0:
@@ -71,6 +73,40 @@ elif compare == "qwen":
             "mode2_qwen_music_2fps.yaml",
             "mode2_qwen_surgery_2fps.yaml",
         ]
+elif compare == "claude":
+    if mode == 0:
+        names = [
+            "claudesonnet_ballsports_5fps.yaml",
+            "claudesonnet_diving_6fps.yaml",
+            "claudesonnet_fitness_4fps.yaml",
+            "claudesonnet_music_2fps.yaml",
+            "claudesonnet_surgery_2fps.yaml",
+        ]
+    elif mode == 2:
+        names = [
+            "mode2-claudesonnet_ballsports_4fps.yaml",
+            "mode2-claudesonnet_diving_4fps.yaml",
+            "mode2-claudesonnet_fitness_4fps.yaml",
+            "mode2-claudesonnet_music_2fps.yaml",
+            "mode2-claudesonnet_surgery_2fps.yaml",
+        ]
+elif compare == "llavavideo":
+    if mode == 0:
+        names = [
+        "llavavideo_ballsports_5fps.yaml",
+        "llavavideo_diving_6fps.yaml",
+        "llavavideo_fitness_4fps.yaml",
+        "llavavideo_music_2fps.yaml",
+        "llavavideo_surgery_2fps.ya",
+        ]
+    elif mode == 2:
+        names = [
+        "mode2-llavavideo_surgery_2fps.yaml",
+        "mode2-llavavideo_fitness_4fps.yaml",
+        "mode2-llavavideo_ballsports_4fps.yaml",
+        "mode2-llavavideo_music_2fps.yaml",
+        "mode2-llavavideo_diving_6fps.yaml", 
+        ]
 else:
     raise ValueError()
 
@@ -90,7 +126,8 @@ for name in names:
     all_preds += preds
 
 df_gpt = pd.concat(all_df, axis=0)
-df_gpt = df_gpt.fillna('b')
+if mode != 0:
+    df_gpt = df_gpt.fillna('b')
 
 
 ### our results
@@ -119,7 +156,8 @@ for name in names:
     df = df[df['gt'].isin(['a', 'b'])]
     all_df.append(df)
 df_us = pd.concat(all_df, axis=0)
-df_us = df_us.fillna('a')
+if mode != 0:
+    df_us = df_us.fillna('a')
 
 # filter
 df_us = df_us[df_us.set_index(['sample_key', 'gt_key']).index.isin(

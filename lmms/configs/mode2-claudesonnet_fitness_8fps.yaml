@@ -1,0 +1,24 @@
+project: viddiff_0
+seed: 0
+debug: 0
+do_eval: 1 
+eval_mode: 2
+
+logging: 
+  name: mode2-claudesonnet_fitness_8fps
+  results_dir: lmms/results/${logging.name}/seed_${seed}
+  overwrite_ok: True
+  verbose: 1 
+
+data:
+  split: fitness
+  debug: ${debug}
+  eval_mode: ${eval_mode}  
+  subset_mode: "0"
+
+lmm:
+  api: openai
+  fps: 8
+  model: anthropic/claude-3.5-sonnet
+  video_representation: frames
+  seed: ${seed}

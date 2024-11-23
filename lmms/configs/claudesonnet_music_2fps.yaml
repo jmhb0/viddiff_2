@@ -1,0 +1,24 @@
+project: viddiff_0
+seed: 0
+debug: 0
+do_eval: 1 
+eval_mode: 0
+
+logging: 
+  name: claudesonnet_music_2fps
+  results_dir: lmms/results/${logging.name}/seed_${seed}
+  overwrite_ok: True
+  verbose: 1 
+
+data:
+  split: music
+  debug: ${debug}
+  eval_mode: ${eval_mode}  
+  subset_mode: "0"
+
+lmm:
+  api: openai
+  fps: 1
+  model: anthropic/claude-3.5-sonnet
+  video_representation: frames
+  seed: ${seed}

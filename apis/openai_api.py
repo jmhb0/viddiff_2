@@ -12,9 +12,10 @@ import decord
 from PIL import Image
 import numpy as np
 import os
+import pickle
 import io
 import shutil
-from typing import List
+from typing import List, Tuple
 import lmdb
 import json
 import sys
@@ -24,8 +25,11 @@ from threading import Lock
 import time
 from tqdm import tqdm
 import redis
+from functools import lru_cache
+
 
 import sys
+
 httpx_logger = logging.getLogger("httpx")
 httpx_logger.setLevel(logging.WARNING)
 
@@ -34,18 +38,18 @@ sys.path.insert(0, ".")
 from cache import cache_utils
 # from cache import cache_utils_redis as cache_utils
 
-client = openai.OpenAI()
 cache_openai = lmdb.open("cache/cache_openai", map_size=int(1e12))
 cache_lock = Lock()
 
 # logging.getLogger("openai").setLevel(logging.ERROR)
 # logging.getLogger("_client").setLevel(logging.ERROR)
 
-HITS = 0 
+HITS = 0
 MISSES = 0
 
 # cache_openai = redis.Redis(host="localhost", port=6379, db=0)
 # cache_openai.config_set("save", "60 1")
+
 
 def call_gpt(
     # args for setting the `messages` param
@@ -53,6 +57,7 @@ def call_gpt(
     imgs: List[np.ndarray] = None,
     system_prompt: str = None,
     json_mode: bool = True,
+    response_format: str = None,
     # kwargs for client.chat.completions.create
     detail: str = "high",
     model: str = "gpt-4o-mini",
@@ -67,6 +72,7 @@ def call_gpt(
     cache: bool = True,
     overwrite_cache: bool = False,
     debug=None,
+    cache_dir=cache_openai,
     num_retries:
     # if json_mode=True, and not json decodable, retry this many time
     int = 3):
@@ -86,10 +92,32 @@ def call_gpt(
     global HITS, MISSES
     print(f"\rGPT cache. Hits: {HITS}. Misses: {MISSES}", end="")
     # response format
-    if json_mode:
-        response_format = {"type": "json_object"}
+
+    if 'gpt' in model:
+        base_url = "https://api.openai.com/v1"
+        api_key = os.getenv("OPENAI_API_KEY")
+    elif 'claude' in model:
+        base_url = "https://openrouter.ai/api/v1"
+        api_key = os.getenv("OPENROUTER_API_KEY")
+    elif 'Qwen' in model: 
+        base_url = "https://api.hyperbolic.xyz/v1"
+        api_key = os.getenv("HYPERBOLIC_API_KEY")
+
+    client = openai.OpenAI(base_url=base_url, api_key=api_key)  
+
+
+    if response_format:
+        response_format_in = response_format
+        is_structured = True
+        assert not json_mode
+        response_format = response_format.schema()
+
     else:
-        response_format = {"type": "text"}
+        is_structured = False
+        if json_mode:
+            response_format = {"type": "json_object"}
+        else:
+            response_format = {"type": "text"}
 
     # system prompt
     messages = [{
@@ -128,12 +156,13 @@ def call_gpt(
         n=n,
     )
 
+    
     if cache:
         cache_key = json.dumps(kwargs, sort_keys=True)
         with cache_lock:
-            msg = cache_utils.get_from_cache(cache_key, cache_openai)
+            msg = cache_utils.get_from_cache(cache_key, cache_dir)
         if msg is not None and not overwrite_cache:
-            if json_mode:
+            if is_structured or json_mode:
                 msg = json.loads(msg)
             with cache_lock:
                 HITS += 1
@@ -147,7 +176,12 @@ def call_gpt(
         assert "imgs_hash_key" in content[-1].keys()
         content.pop()
 
-        base64_imgs = [_encode_image_np(im) for im in imgs]
+        if 'gpt' not in model:
+            imagelst = [Image.fromarray(im) for im in imgs]
+            base64_imgs = ImageList(tuple(imagelst)).to_base64()
+        else:
+            base64_imgs = [_encode_image_np(im) for im in imgs]
+
         for base64_img in base64_imgs:
             content.append({
                 "type": "image_url",
@@ -157,26 +191,29 @@ def call_gpt(
                 },
             })
 
-    # call gpt if not cached. If json_mode=True, check that it's json and retry if not
-    for i in range(num_retries):
+    if is_structured:
+        kwargs['response_format'] = response_format_in
 
-        response = client.chat.completions.create(**kwargs)
-        prompt_tokens = response.usage.prompt_tokens
-        completion_tokens = response.usage.completion_tokens
-        msg = response.choices[0].message.content
-
+    # call gpt
+    # response = client.chat.completions.create(**kwargs)
+    response = client.beta.chat.completions.parse(**kwargs)
+    prompt_tokens = response.usage.prompt_tokens
+    completion_tokens = response.usage.completion_tokens
+    msg = response.choices[0].message.content
 
     # save to cache if enabled
     if cache:
         with cache_lock:
-            cache_utils.save_to_cache(cache_key, msg, cache_openai)
+            cache_utils.save_to_cache(cache_key, msg, cache_dir)
 
-    if json_mode:
+    if json_mode or is_structured:
         msg = json.loads(msg)
 
     response = dict(prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens)
-    price = compute_api_call_cost(prompt_tokens, completion_tokens, model=model)
+    price = compute_api_call_cost(prompt_tokens,
+                                  completion_tokens,
+                                  model=model)
 
     return msg, response
 
@@ -188,7 +225,43 @@ def _encode_image_np(image_np: np.array):
     buffered = io.BytesIO()
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
+class ImageList:
+    """Handles a list of images with encoding support for base64 conversion.
 
+    Attributes:
+        images (Tuple[Image.Image]): A tuple containing PIL Image objects.
+    """
+
+    images: Tuple[Image.Image]
+
+    def __init__(self, images):
+        self.images = images
+
+    @staticmethod
+    @lru_cache()  # pickle strings are hashable and can be cached.
+    def _encode(image_pkl: str) -> str:
+        """Encodes a pickled image to a base64 string.
+
+        Args:
+            image_pkl (str): A serialized representation of the image.
+
+        Returns:
+            str: The base64-encoded PNG image.
+        """
+        image: Image.Image = pickle.loads(image_pkl)  # deserialize image
+
+        with io.BytesIO() as buffer:
+            image.save(buffer, format="jpeg")
+            return base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    def to_base64(self) -> Tuple[str]:
+        """Converts the images in the list to base64-encoded PNG format.
+
+        Returns:
+            Tuple[str]: A tuple of base64-encoded strings for each image.
+        """
+        image_pkls = [pickle.dumps(img) for img in self.images]
+        return tuple(ImageList._encode(pkl) for pkl in image_pkls)
 
 def call_gpt_batch(texts,
                    imgs=None,
@@ -218,7 +291,6 @@ def call_gpt_batch(texts,
             if debug is not None:
                 all_kwargs[i]['debug'] = debug[i]
 
-
     with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
         futures = []
 
@@ -228,15 +300,14 @@ def call_gpt_batch(texts,
 
         # run
         results = [list(future.result()) for future in futures]
- 
 
     if get_meta:
         for i, (msg, tokens) in enumerate(results):
 
             if tokens is not None:
-                price = compute_api_call_cost(
-                    tokens['prompt_tokens'], tokens['completion_tokens'],
-                    kwargs.get("model", "gpt-4o"))
+                price = compute_api_call_cost(tokens['prompt_tokens'],
+                                              tokens['completion_tokens'],
+                                              kwargs.get("model", "gpt-4o"))
             else:
                 price = 0
 
@@ -276,6 +347,8 @@ def compute_api_call_cost(prompt_tokens: int,
         key = "gpt-4"
     elif 'gpt-3.5-turbo' in model:
         key = "gpt-3.5-turbo"
+    else:
+        return 0
 
     price = prompt_tokens * prices_per_million_input[
         key] + completion_tokens * prices_per_million_output[key]
@@ -291,13 +364,22 @@ if __name__ == "__main__":
     sys.path.insert(0, "..")
     sys.path.insert(0, ".")
 
-    text0 = "How did Steve Irwin die? "
-    # text1 = "how many chucks could a wood chuck chuck?"
-    # text2 = "who has the best llm?"
+    text0 = "What model are you? How did Steve Irwin die? "
+    from pydantic import BaseModel
 
-    model = "gpt-4o-mini"
-    print(model)
-    # msg, res = call_gpt(text0, model=model, cache=False, json_mode=False)
-    res = call_gpt_batch([text0]*10, cache=False, json_mode=False)
+    class Ret(BaseModel):
+        answer: str
+
+    model = "anthropic/claude-3.5-sonnet"
+    text0 = "whats in the image"
+    from PIL import Image
+    imgs = [np.array(Image.open("tmp.png"))]
+    msg, res = call_gpt(text0,
+                        model=model,
+                        imgs=imgs,
+                        cache=False,
+                        json_mode=False,
+                        # response_format=Ret
+                        )
     ipdb.set_trace()
     pass

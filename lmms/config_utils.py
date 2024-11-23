@@ -45,6 +45,17 @@ def load_config(f_config: str,
     os.makedirs(args.logging.results_dir, exist_ok=True)
 
     args.data.subset_mode = str(args.data.subset_mode)
+
+    if 'test_samevideo' not in args.keys():
+        args.test_samevideo = 0
+    if 'test_flipvids' not in args.keys():
+        args.test_flipvids = 0
+    if args.test_flipvids: 
+        print("*"*80)
+        print("Flag set [args.test_flipvids] flips the vids")
+        print(" but does NOT flip the A/B prediciton. Need to handle in postprocessing")
+        print("*"*80)
+        
     # save config
     with open(os.path.join(args.logging.results_dir, "args.json"), 'w') as f:
         json.dump(OmegaConf.to_container(args), f, indent=4)
